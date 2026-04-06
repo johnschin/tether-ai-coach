@@ -2,7 +2,7 @@
 // TETHER — COACH MODULE
 // =============================================
 
-const WORKER_URL = 'https://tether-proxy.john-834.workers.dev';
+// WORKER_URL is defined in memory.js — do not redeclare here
 
 let conversationHistory = [];
 let currentMemoryContext = '';
