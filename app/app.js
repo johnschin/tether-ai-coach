@@ -5,11 +5,13 @@ window.addEventListener('DOMContentLoaded', async () => {
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').catch(console.error);
   }
-  const session = await getSession();
-  if (session?.user) {
-    currentUser = session.user;
-    await startUserSession();
-  }
+ const session = await getSession();
+if (session?.user) {
+  currentUser = session.user;
+  await startUserSession();
+} else {
+  showScreen('auth-screen');  // ADD THIS
+}
   onAuthStateChange(async (event, session) => {
     if (event === 'SIGNED_IN' && session?.user) {
       currentUser = session.user;
