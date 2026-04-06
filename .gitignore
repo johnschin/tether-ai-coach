@@ -1,0 +1,24 @@
+# Environment variables — NEVER commit these
+.env
+.env.local
+.env.production
+.dev.vars
+
+# Cloudflare
+worker/node_modules/
+worker/.wrangler/
+
+# Mac junk
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Build outputs
+dist/
+build/
