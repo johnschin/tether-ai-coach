@@ -1,8 +1,8 @@
 // =============================================
-// TETHER — COACH MODULE
+// TETHER — COACH MODULE v2
 // =============================================
 
-// WORKER_URL is defined in memory.js — do not redeclare here
+// NOTE: WORKER_URL is declared in memory.js — not here
 
 let conversationHistory = [];
 let currentMemoryContext = '';
