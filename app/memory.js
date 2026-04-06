@@ -1,5 +1,16 @@
 const WORKER_URL = 'https://tether-proxy.john-834.workers.dev';
 
+async function initSession(userId) {
+  try {
+    const { error } = await supabaseClient
+      .from('user_profiles')
+      .upsert({ id: userId }, { onConflict: 'id' });
+    if (error) console.error('initSession error:', error);
+  } catch (err) {
+    console.error('initSession exception:', err);
+  }
+}
+
 async function getMemoryContext(userId) {
   try {
     const res = await fetch(`${WORKER_URL}/get-memory`, {
@@ -14,6 +25,7 @@ async function getMemoryContext(userId) {
     return '';
   }
 }
+
 async function saveSessionSummary(userId, conversation) {
   try {
     const conversationText = conversation.map(m => `${m.role}: ${m.content}`).join('\n');
@@ -26,6 +38,7 @@ async function saveSessionSummary(userId, conversation) {
     console.error('Summary save error:', err);
   }
 }
+
 async function saveAdkarScores(userId, scores, changeContext) {
   try {
     const res = await fetch(`${WORKER_URL}/adkar`, {
