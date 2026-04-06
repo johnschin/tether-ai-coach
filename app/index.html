@@ -671,7 +671,7 @@
 let currentUser = null;
 let adkarScores = {};
 
-window.addEventListener('load', async () => {
+window.addEventListener('DOMContentLoaded', async () => {
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').catch(console.error);
   }
