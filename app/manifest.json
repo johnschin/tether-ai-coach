@@ -1,0 +1,10 @@
+{
+  "name": "Tether AI Coach",
+  "short_name": "Tether",
+  "description": "Your private workplace resilience coach",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f1417",
+  "theme_color": "#1a6b5e",
+  "orientation": "portrait"
+}
