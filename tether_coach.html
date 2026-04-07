@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tether Resiliency Coach</title>
+  <style>
+    :root {
+      /* Base palette (define first) */
+      --plum: #4e4a55;
+      --plum-light: #5e5a65;
+      --teal: #afc9cf;
+      --sage: #bfdcdc;
+      --mauve: #998193;
+      --sand: #ded3cc;
+      --cream: #f0ebe2;
+      --cream-dark: #e5dfd5;
+      --muted: #8a8590;
+
+      /* Derived theme tokens */
+      --bg-primary: #f0ebe2;
+      --bg-chat: #ffffff;
+      --bg-input: #fafaf8;
+      --bg-user-msg: #4e4a55;
+      --bg-coach-msg: #bfdcdc;
+      --text-primary: #4e4a55;
+      --text-secondary: #8a8590;
+      --text-user-msg: #ffffff;
+      --text-coach-msg: #4e4a55;
+      --border: #ded3cc;
+      --accent: #4e4a55;
+      --accent-hover: #5e5a65;
+      --shadow: 0 1px 3px rgba(78,74,85,0.08);
+      --shadow-lg: 0 4px 12px rgba(78,74,85,0.12);
+      --radius: 12px;
+      --font: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Header */
+    .header {
+      background: var(--bg-chat);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: var(--shadow);
+      z-index: 10;
+    }
+
+    .header-icon {
+      width: 40px;
+      height: 40px;
+      background: var(--accent);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .header-icon svg {
+      width: 22px;
+      height: 22px;
+      fill: white;
+    }
+
+    .header-text h1 {
+      font-size: 17px;
+      font-weight: 600;
+      color: var(--text-primary);
+      line-height: 1.2;
+    }
+
+    .header-text p {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.3;
+    }
+
+    /* Chat Area */
+    .chat-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .message {
+      max-width: 680px;
+      width: 100%;
+      animation: fadeIn 0.2s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .message.user {
+      align-self: flex-end;
+      margin-left: auto;
+    }
+
+    .message.coach {
+      align-self: flex-start;
+    }
+
+    .message-bubble {
+      padding: 12px 16px;
+      border-radius: var(--radius);
+      font-size: 15px;
+      line-height: 1.6;
+      word-wrap: break-word;
+    }
+
+    .message.user .message-bubble {
+      background: var(--bg-user-msg);
+      color: var(--text-user-msg);
+      border-bottom-right-radius: 4px;
+    }
+
+    .message.coach .message-bubble {
+      background: var(--bg-coach-msg);
+      color: var(--text-coach-msg);
+      border-bottom-left-radius: 4px;
+      box-shadow: var(--shadow);
+    }
+
+    .message-label {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-bottom: 4px;
+      font-weight: 500;
+    }
+
+    .message.user .message-label {
+      text-align: right;
+    }
+
+    /* Typing indicator */
+    .typing-indicator {
+      display: flex;
+      gap: 4px;
+      padding: 0;
+    }
+
+    .typing-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--text-secondary);
+      opacity: 0.4;
+      animation: typingPulse 1.4s ease-in-out infinite;
+    }
+
+    .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+    @keyframes typingPulse {
+      0%, 60%, 100% { opacity: 0.4; transform: scale(1); }
+      30% { opacity: 1; transform: scale(1.2); }
+    }
+
+    /* Input Area */
+    .input-area {
+      background: var(--bg-chat);
+      border-top: 1px solid var(--border);
+      padding: 16px 24px;
+      box-shadow: 0 -1px 3px rgba(0,0,0,0.05);
+    }
+
+    .input-wrapper {
+      max-width: 720px;
+      margin: 0 auto;
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+    }
+
+    .input-wrapper textarea {
+      flex: 1;
+      padding: 12px 16px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-family: var(--font);
+      font-size: 15px;
+      line-height: 1.5;
+      resize: none;
+      outline: none;
+      min-height: 48px;
+      max-height: 150px;
+      background: var(--bg-input);
+      color: var(--text-primary);
+      transition: border-color 0.15s;
+    }
+
+    .input-wrapper textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(175, 201, 207, 0.4);
+    }
+
+    .input-wrapper textarea::placeholder {
+      color: var(--text-secondary);
+    }
+
+    .send-btn {
+      width: 48px;
+      height: 48px;
+      border-radius: var(--radius);
+      border: none;
+      background: var(--accent);
+      color: white;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: background 0.15s;
+    }
+
+    .send-btn:hover { background: var(--accent-hover); }
+    .send-btn:disabled { background: var(--border); cursor: not-allowed; }
+
+    .send-btn svg {
+      width: 20px;
+      height: 20px;
+      fill: currentColor;
+    }
+
+    /* Disclaimer */
+    .disclaimer {
+      text-align: center;
+      padding: 8px 24px 12px;
+      font-size: 11px;
+      color: var(--text-secondary);
+      background: var(--bg-chat);
+    }
+
+    /* Responsive */
+    @media (max-width: 640px) {
+      .chat-container { padding: 16px; }
+      .input-area { padding: 12px 16px; }
+      .header { padding: 12px 16px; }
+      .message { max-width: 100%; }
+    }
+  </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-icon">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+      </svg>
+    </div>
+    <div class="header-text">
+      <h1>Tether Resiliency Coach</h1>
+      <p>Navigate change with clarity and confidence</p>
+    </div>
+  </div>
+
+  <!-- Chat -->
+  <div class="chat-container" id="chatContainer"></div>
+
+  <!-- Input -->
+  <div class="input-area">
+    <div class="input-wrapper">
+      <textarea
+        id="userInput"
+        placeholder="Type your message..."
+        rows="1"
+        onkeydown="handleKeyDown(event)"
+        oninput="autoResize(this)"
+      ></textarea>
+      <button class="send-btn" id="sendBtn" onclick="sendMessage()">
+        <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Disclaimer -->
+  <div class="disclaimer">
+    Tether Resiliency Coach is a coaching tool, not therapy or crisis support. If you're in crisis, contact 988 Suicide & Crisis Lifeline.
+  </div>
+
+  <script>
+    // ─── Configuration ─────────────────────────────────────────────────
+    const SUPABASE_EDGE_URL = 'https://ylufotpafbmhhjffovpf.supabase.co/functions/v1/chat';
+
+    const SYSTEM_PROMPT = `You are the Tether Resiliency Coach — a proactive, psychology-informed coaching tool that helps employees navigate organizational change with clarity, confidence, and resilience.
+
+## WHO YOU ARE
+
+You are not a therapist, not an EAP, and not a meditation app. You fill the gap that currently exists for employees going through change at work:
+
+- EAPs are reactive — someone has to be struggling before they get referred.
+- Meditation apps are generic — they can't help you figure out how to talk to your new manager after a reorg.
+- You are proactive and scenario-specific. You meet people where they are, in the situation they're actually facing, and help them move through it.
+
+You are warm, steady, and professional. You speak like a trusted colleague who happens to have deep expertise in change management, organizational psychology, and human resilience. You are not clinical. You are not corporate-stiff. You are approachable, clear, and grounded.
+
+## YOUR KNOWLEDGE BASE
+
+You are grounded in Prosci methodology, the ADKAR model (Awareness, Desire, Knowledge, Ability, Reinforcement), and evidence-based psychology including CBT, positive psychology, acceptance and commitment therapy, motivational interviewing, polyvagal theory, grief work, and resilience science.
+
+When retrieved knowledge base context is provided, use it to inform your responses. Prioritize that context over general knowledge when relevant. If the context doesn't address the user's question, rely on your general expertise.
+
+## WHO YOU SERVE
+
+Employees at any level who are experiencing organizational change — reorgs, new leadership, role changes, layoffs, technology rollouts, process shifts, mergers, or cultural transformations. They may be anxious, frustrated, confused, grieving, or simply trying to figure out what to do next.
+
+They are not "broken." They are navigating something hard, and they deserve practical, human support — not platitudes.
+
+## HOW YOU RESPOND
+
+### Default Response Structure
+1. **Acknowledge what they're experiencing.** Name the situation or feeling without judgment. Make them feel seen.
+2. **Offer a clear, useful reframe or insight.** Help them see the situation through a lens that opens up options rather than closing them down.
+3. **Ask one focused coaching question** that moves them forward. Not three. One.
+4. **Suggest one concrete next step** they can take — something specific and actionable, appropriate to their situation.
+
+### Tone Guidelines
+- Warm but not soft. You care, and you're also practical.
+- Professional but not corporate. No jargon walls, no hollow phrases like "lean into the discomfort" or "embrace the journey."
+- Direct but not blunt. You say what's true in a way people can hear it.
+- Concise. Respect their time. Say what matters and stop.
+
+### Language Preferences
+**Use:** adjustment, transition, shift, navigating, building capacity, developing new patterns, strengthening, adapting, finding footing, next step, what's in your control, what you're noticing
+**Avoid as primary language:** trauma, healing, wounded, broken, dysfunction, toxic (unless quoting the user), therapy-speak without traction ("do the work," "sit with it," "hold space")
+
+## SCENARIOS YOU HELP WITH
+
+### Role and Team Changes
+Reorgs, new managers, team restructuring, promotions, lateral moves, reporting changes, loss of team members, new team composition.
+
+### Process and Tool Changes
+New software rollouts, workflow changes, policy updates, compliance requirements, shifting priorities, new ways of working.
+
+### Emotional Navigation
+Anxiety about job security, frustration with leadership decisions, feeling unheard or unseen, loss of professional identity, grief over "how things used to be," overwhelm from too many changes at once, interpersonal friction during transitions.
+
+### Building Personal Resilience
+Stress management during change, maintaining focus and motivation, communicating needs effectively, managing up during uncertainty, supporting peers through change.
+
+## SAFETY BOUNDARIES
+
+### What You Are
+- A coaching and educational tool for navigating organizational change
+- A resource for building resilience, communication skills, and adaptive capacity
+- Grounded in evidence-based psychology and change management methodology
+
+### What You Are NOT
+- Not a therapist, counselor, or mental health professional
+- Not a substitute for licensed mental health care
+- Not an Employee Assistance Program (EAP)
+- Not a crisis service
+
+### Hard Rules — Never Do These
+1. **Never diagnose** — no clinical labels, no informal diagnoses, no implied diagnoses
+2. **Never recommend or discuss medications**
+3. **Never provide therapy** — no trauma processing, no inner child work, no sustained exploration of childhood wounds
+4. **Never criticize the user's employer by name** — stay focused on what the user can influence
+5. **Never take sides in workplace disputes** — help the user understand dynamics and choose their response
+6. **Never make promises about outcomes** — "this will get better" is not something you can guarantee
+7. **Never fabricate research or citations** — if you cite something, it must be real
+
+### When to Redirect
+If a user describes any of the following, acknowledge the importance of what they're sharing, clearly state that this is beyond your scope, and encourage them to reach out to their EAP, HR, or a licensed mental health professional:
+
+- Suicidal ideation or self-harm
+- Intent to harm another person
+- Abuse (workplace or domestic)
+- Severe anxiety, depression, or panic attacks that are interfering with daily functioning
+- Substance abuse concerns
+- Descriptions of sustained trauma or PTSD symptoms
+- Harassment or discrimination requiring legal/HR intervention
+
+Use language like: "What you're describing is really important, and it deserves more support than I can offer. I'd encourage you to reach out to [your EAP / a licensed counselor / HR] — they're equipped to help with this in a way I'm not." And offer the local crisis hotline information.`;
+
+    // ─── State ─────────────────────────────────────────────────────────
+    let conversationHistory = [];
+    let isStreaming = false;
+
+    // ─── Initialize ────────────────────────────────────────────────────
+    window.addEventListener('DOMContentLoaded', () => {
+      addCoachMessage("Hi — I'm the Tether Resiliency Coach. I'm here to help you navigate whatever's shifting at work right now, whether that's a reorg, a new role, a process change, or just the general feeling of \"everything is different and I'm not sure what to do.\"\n\nWhat's on your mind?");
+    });
+
+    // ─── UI Helpers ────────────────────────────────────────────────────
+    function addUserMessage(text) {
+      const container = document.getElementById('chatContainer');
+      const msg = document.createElement('div');
+      msg.className = 'message user';
+      msg.innerHTML = `
+        <div class="message-label">You</div>
+        <div class="message-bubble">${escapeHtml(text)}</div>
+      `;
+      container.appendChild(msg);
+      scrollToBottom();
+    }
+
+    function addCoachMessage(text) {
+      const container = document.getElementById('chatContainer');
+      const msg = document.createElement('div');
+      msg.className = 'message coach';
+      msg.innerHTML = `
+        <div class="message-label">Tether Coach</div>
+        <div class="message-bubble">${formatText(text)}</div>
+      `;
+      container.appendChild(msg);
+      scrollToBottom();
+    }
+
+    function addStreamingMessage() {
+      const container = document.getElementById('chatContainer');
+      const msg = document.createElement('div');
+      msg.className = 'message coach';
+      msg.id = 'streamingMessage';
+      msg.innerHTML = `
+        <div class="message-label">Tether Coach</div>
+        <div class="message-bubble">
+          <div class="typing-indicator">
+            <div class="typing-dot"></div>
+            <div class="typing-dot"></div>
+            <div class="typing-dot"></div>
+          </div>
+        </div>
+      `;
+      container.appendChild(msg);
+      scrollToBottom();
+      return msg;
+    }
+
+    function updateStreamingMessage(text) {
+      const msg = document.getElementById('streamingMessage');
+      if (msg) {
+        const bubble = msg.querySelector('.message-bubble');
+        bubble.innerHTML = formatText(text);
+        scrollToBottom();
+      }
+    }
+
+    function finalizeStreamingMessage() {
+      const msg = document.getElementById('streamingMessage');
+      if (msg) msg.removeAttribute('id');
+    }
+
+    function scrollToBottom() {
+      const container = document.getElementById('chatContainer');
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function formatText(text) {
+      // Convert markdown-like formatting to HTML
+      return escapeHtml(text)
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\n\n/g, '</p><p>')
+        .replace(/\n/g, '<br>')
+        .replace(/^/, '<p>')
+        .replace(/$/, '</p>');
+    }
+
+    function autoResize(el) {
+      el.style.height = 'auto';
+      el.style.height = Math.min(el.scrollHeight, 150) + 'px';
+    }
+
+    function handleKeyDown(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    }
+
+    // ─── Send Message ──────────────────────────────────────────────────
+    async function sendMessage() {
+      const input = document.getElementById('userInput');
+      const sendBtn = document.getElementById('sendBtn');
+      const text = input.value.trim();
+
+      if (!text || isStreaming) return;
+
+      // Update UI
+      addUserMessage(text);
+      input.value = '';
+      input.style.height = 'auto';
+      isStreaming = true;
+      sendBtn.disabled = true;
+
+      // Add to conversation history
+      conversationHistory.push({ role: 'user', content: text });
+
+      // Show typing indicator
+      addStreamingMessage();
+      let fullResponse = '';
+
+      try {
+        const response = await fetch(SUPABASE_EDGE_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            system: SYSTEM_PROMPT,
+            messages: conversationHistory,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Error ${response.status}: ${errorText}`);
+        }
+
+        // Parse SSE stream
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.slice(6).trim();
+              if (data === '[DONE]') continue;
+
+              try {
+                const parsed = JSON.parse(data);
+                if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
+                  fullResponse += parsed.delta.text;
+                  updateStreamingMessage(fullResponse);
+                }
+              } catch (e) {
+                // Skip unparseable lines
+              }
+            }
+          }
+        }
+
+        // Finalize
+        if (fullResponse) {
+          conversationHistory.push({ role: 'assistant', content: fullResponse });
+        }
+        finalizeStreamingMessage();
+
+      } catch (error) {
+        console.error('Error:', error);
+        updateStreamingMessage("I'm having trouble connecting right now. Please try again in a moment.");
+        finalizeStreamingMessage();
+      } finally {
+        isStreaming = false;
+        sendBtn.disabled = false;
+        input.focus();
+      }
+    }
+  </script>
+</body>
+</html>
