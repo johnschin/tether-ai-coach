@@ -36,6 +36,17 @@ async function enterApp(user) {
   if (appShown) return;
   appShown = true;
   currentUser = user;
+
+  // Save preferred name to user profile if provided during sign-up
+  const storedName = localStorage.getItem('tether_preferred_name');
+  if (storedName) {
+    try {
+      await supabaseClient.auth.updateUser({ data: { preferred_name: storedName } });
+      await supabaseClient.from('user_profiles').upsert({ id: user.id, preferred_name: storedName }, { onConflict: 'id' });
+    } catch (e) { console.error('Could not save preferred name:', e); }
+    localStorage.removeItem('tether_preferred_name');
+  }
+
   await startUserSession();
 }
 
@@ -51,13 +62,20 @@ function checkCorporateEmail(value) {
 
 async function handleMagicLink() {
   const emailInput = document.getElementById('magic-email');
+  const nameInput = document.getElementById('magic-name');
   const btn = document.getElementById('magic-btn');
   const errorEl = document.getElementById('auth-error');
   const email = emailInput.value.trim().toLowerCase();
+  const preferredName = nameInput.value.trim();
 
   if (!email || !email.includes('@') || !email.includes('.')) {
     errorEl.textContent = 'Please enter a valid email address.';
     return;
+  }
+
+  // Store name locally so we can save it after auth completes
+  if (preferredName) {
+    localStorage.setItem('tether_preferred_name', preferredName);
   }
 
   errorEl.textContent = '';
@@ -84,9 +102,9 @@ function resetMagicForm() {
   document.getElementById('auth-error').textContent = '';
   const warning = document.getElementById('corp-email-warning');
   if (warning) warning.style.display = 'none';
-  const emailInput = document.getElementById('magic-email');
-  emailInput.value = '';
-  emailInput.focus();
+  document.getElementById('magic-name').value = '';
+  document.getElementById('magic-email').value = '';
+  document.getElementById('magic-name').focus();
 }
 
 async function handleSignOut() {
