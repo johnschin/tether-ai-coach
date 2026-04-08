@@ -1,70 +1,108 @@
 let currentUser = null;
 let adkarScores = {};
+let appShown = false;
 
 window.addEventListener('DOMContentLoaded', async () => {
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').catch(console.error);
   }
- const session = await getSession();
-if (session?.user) {
-  currentUser = session.user;
-  await startUserSession();
-} else {
-  showScreen('auth-screen');  // ADD THIS
-}
+
+  // Clean up auth hash from URL (magic link leaves tokens in fragment)
+  if (window.location.hash && window.location.hash.includes('access_token')) {
+    history.replaceState(null, '', window.location.pathname + window.location.search);
+  }
+
+  const session = await getSession();
+  if (session?.user) {
+    enterApp(session.user);
+  } else {
+    showScreen('auth-screen');
+  }
+
   onAuthStateChange(async (event, session) => {
-    if (event === 'SIGNED_IN' && session?.user) {
-      currentUser = session.user;
-      await startUserSession();
+    if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session?.user) {
+      enterApp(session.user);
     }
     if (event === 'SIGNED_OUT') {
       currentUser = null;
+      appShown = false;
       showScreen('auth-screen');
     }
   });
 });
 
-function showTab(tab) {
-  document.querySelectorAll('.auth-tab').forEach((t, i) => {
-    t.classList.toggle('active', (i === 0 && tab === 'signin') || (i === 1 && tab === 'signup'));
-  });
-  document.getElementById('signin-form').style.display = tab === 'signin' ? 'block' : 'none';
-  document.getElementById('signup-form').style.display = tab === 'signup' ? 'block' : 'none';
-  document.getElementById('auth-error').textContent = '';
+// ─── Auth Helpers ──────────────────────────────────────────────────
+async function enterApp(user) {
+  if (appShown) return;
+  appShown = true;
+  currentUser = user;
+  await startUserSession();
 }
-async function handleSignIn() {
-  const email = document.getElementById('signin-email').value.trim();
-  const password = document.getElementById('signin-password').value;
-  const btn = document.querySelector('#signin-form .auth-btn');
-  if (!email || !password) { document.getElementById('auth-error').textContent = 'Please enter your email and password.'; return; }
-  btn.disabled = true; btn.textContent = 'Signing in...';
-  try { await signIn(email, password); }
-  catch (err) { document.getElementById('auth-error').textContent = err.message; btn.disabled = false; btn.textContent = 'Sign In'; }
+
+function checkCorporateEmail(value) {
+  const warning = document.getElementById('corp-email-warning');
+  if (!warning) return;
+  if (!value || !value.includes('@')) {
+    warning.style.display = 'none';
+    return;
+  }
+  warning.style.display = isPersonalEmail(value) ? 'none' : 'block';
 }
-async function handleSignUp() {
-  const name = document.getElementById('signup-name').value.trim();
-  const email = document.getElementById('signup-email').value.trim();
-  const password = document.getElementById('signup-password').value;
-  const btn = document.querySelector('#signup-form .auth-btn');
-  if (!email || !password) { document.getElementById('auth-error').textContent = 'Email and password are required.'; return; }
-  if (password.length < 8) { document.getElementById('auth-error').textContent = 'Password must be at least 8 characters.'; return; }
-  btn.disabled = true; btn.textContent = 'Creating account...';
+
+async function handleMagicLink() {
+  const emailInput = document.getElementById('magic-email');
+  const btn = document.getElementById('magic-btn');
+  const errorEl = document.getElementById('auth-error');
+  const email = emailInput.value.trim().toLowerCase();
+
+  if (!email || !email.includes('@') || !email.includes('.')) {
+    errorEl.textContent = 'Please enter a valid email address.';
+    return;
+  }
+
+  errorEl.textContent = '';
+  btn.disabled = true;
+  btn.textContent = 'Sending link...';
+
   try {
-    await signUp(email, password, name);
-    document.getElementById('auth-error').style.color = '#81c784';
-    document.getElementById('auth-error').textContent = 'Account created! Signing you in...';
-  } catch (err) { document.getElementById('auth-error').textContent = err.message; btn.disabled = false; btn.textContent = 'Create Account'; }
+    await sendMagicLink(email);
+    // Show check-email state
+    document.getElementById('magic-form').style.display = 'none';
+    document.getElementById('check-email').style.display = 'block';
+    document.getElementById('sent-email-display').textContent = email;
+  } catch (err) {
+    errorEl.textContent = err.message || 'Something went wrong. Please try again.';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Send me a login link';
+  }
 }
+
+function resetMagicForm() {
+  document.getElementById('magic-form').style.display = 'block';
+  document.getElementById('check-email').style.display = 'none';
+  document.getElementById('auth-error').textContent = '';
+  const warning = document.getElementById('corp-email-warning');
+  if (warning) warning.style.display = 'none';
+  const emailInput = document.getElementById('magic-email');
+  emailInput.value = '';
+  emailInput.focus();
+}
+
 async function handleSignOut() {
   if (typeof conversationHistory !== 'undefined' && conversationHistory.length > 0) await endSession(currentUser.id);
+  appShown = false;
   await signOut();
 }
+
 async function startUserSession() {
-  const name = currentUser.user_metadata?.preferred_name;
+  const name = currentUser.user_metadata?.preferred_name || currentUser.email?.split('@')[0];
   if (name) document.getElementById('user-greeting').textContent = `Hi ${name} — your session is private`;
   await initSession(currentUser.id);
   showScreen('adkar-screen');
 }
+
+// ─── ADKAR ─────────────────────────────────────────────────────────
 function setScore(stage, score) {
   adkarScores[stage] = score;
   document.querySelectorAll(`#scale-${stage} button`).forEach((btn, i) => {
@@ -80,6 +118,8 @@ async function submitAdkar() {
   showScreen('chat-screen');
 }
 function skipAdkar() { showScreen('chat-screen'); }
+
+// ─── Chat ──────────────────────────────────────────────────────────
 async function handleSend() {
   const input = document.getElementById('chat-input');
   const message = input.value.trim();
