@@ -7,20 +7,21 @@ window.addEventListener('DOMContentLoaded', async () => {
     navigator.serviceWorker.register('/sw.js').catch(console.error);
   }
 
-  // Clean up auth hash from URL (magic link leaves tokens in fragment)
-  if (window.location.hash && window.location.hash.includes('access_token')) {
-    history.replaceState(null, '', window.location.pathname + window.location.search);
-  }
+  // Detect if we're returning from a magic link click
+  const hasHashTokens = window.location.hash && window.location.hash.includes('access_token');
+  const hasCodeParam = new URLSearchParams(window.location.search).has('code');
+  const isReturningFromMagicLink = hasHashTokens || hasCodeParam;
 
-  const session = await getSession();
-  if (session?.user) {
-    enterApp(session.user);
-  } else {
-    showScreen('auth-screen');
-  }
-
+  // Set up auth state listener FIRST — this catches magic link returns
   onAuthStateChange(async (event, session) => {
     if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session?.user) {
+      // Clean up auth tokens from URL now that Supabase has processed them
+      if (window.location.hash && window.location.hash.includes('access_token')) {
+        history.replaceState(null, '', window.location.pathname + window.location.search);
+      }
+      if (new URLSearchParams(window.location.search).has('code')) {
+        history.replaceState(null, '', window.location.pathname);
+      }
       enterApp(session.user);
     }
     if (event === 'SIGNED_OUT') {
@@ -29,6 +30,30 @@ window.addEventListener('DOMContentLoaded', async () => {
       showScreen('auth-screen');
     }
   });
+
+  // If returning from a magic link, let onAuthStateChange handle it.
+  // Only check for existing session when NOT in the middle of a redirect.
+  if (!isReturningFromMagicLink) {
+    const session = await getSession();
+    if (session?.user) {
+      enterApp(session.user);
+    } else {
+      showScreen('auth-screen');
+    }
+  }
+  // If returning from magic link but auth doesn't resolve within 5s, show auth screen
+  // (handles edge case where token is expired or invalid)
+  if (isReturningFromMagicLink) {
+    setTimeout(() => {
+      if (!appShown) {
+        // Clean up stale tokens from URL
+        history.replaceState(null, '', window.location.pathname);
+        showScreen('auth-screen');
+        const errorEl = document.getElementById('auth-error');
+        if (errorEl) errorEl.textContent = 'That login link has expired. Please request a new one.';
+      }
+    }, 5000);
+  }
 });
 
 // ─── Auth Helpers ──────────────────────────────────────────────────
@@ -36,6 +61,17 @@ async function enterApp(user) {
   if (appShown) return;
   appShown = true;
   currentUser = user;
+
+  // Save preferred name to user profile if provided during sign-up
+  const storedName = localStorage.getItem('tether_preferred_name');
+  if (storedName) {
+    try {
+      await supabaseClient.auth.updateUser({ data: { preferred_name: storedName } });
+      await supabaseClient.from('user_profiles').upsert({ id: user.id, preferred_name: storedName }, { onConflict: 'id' });
+    } catch (e) { console.error('Could not save preferred name:', e); }
+    localStorage.removeItem('tether_preferred_name');
+  }
+
   await startUserSession();
 }
 
@@ -51,13 +87,20 @@ function checkCorporateEmail(value) {
 
 async function handleMagicLink() {
   const emailInput = document.getElementById('magic-email');
+  const nameInput = document.getElementById('magic-name');
   const btn = document.getElementById('magic-btn');
   const errorEl = document.getElementById('auth-error');
   const email = emailInput.value.trim().toLowerCase();
+  const preferredName = nameInput.value.trim();
 
   if (!email || !email.includes('@') || !email.includes('.')) {
     errorEl.textContent = 'Please enter a valid email address.';
     return;
+  }
+
+  // Store name locally so we can save it after auth completes
+  if (preferredName) {
+    localStorage.setItem('tether_preferred_name', preferredName);
   }
 
   errorEl.textContent = '';
@@ -84,9 +127,9 @@ function resetMagicForm() {
   document.getElementById('auth-error').textContent = '';
   const warning = document.getElementById('corp-email-warning');
   if (warning) warning.style.display = 'none';
-  const emailInput = document.getElementById('magic-email');
-  emailInput.value = '';
-  emailInput.focus();
+  document.getElementById('magic-name').value = '';
+  document.getElementById('magic-email').value = '';
+  document.getElementById('magic-name').focus();
 }
 
 async function handleSignOut() {
