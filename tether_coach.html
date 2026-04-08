@@ -658,7 +658,12 @@
     // Initialize Supabase client (session auto-persists in localStorage)
     let supabase;
     try {
-      supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: {
+          flowType: 'implicit',
+          detectSessionInUrl: true,
+        }
+      });
     } catch (e) {
       console.error('Failed to initialize Supabase client:', e);
     }
@@ -879,11 +884,6 @@ Use language like: "What you're describing is really important, and it deserves 
       document.getElementById('authGate').classList.add('hidden');
       document.getElementById('appShell').classList.add('visible');
 
-      // Clean up auth hash from URL (magic link leaves tokens in fragment)
-      if (window.location.hash && window.location.hash.includes('access_token')) {
-        history.replaceState(null, '', window.location.pathname + window.location.search);
-      }
-
       // Show email badge in header
       const badge = document.getElementById('userBadge');
       if (user.email) {
@@ -907,22 +907,52 @@ Use language like: "What you're describing is really important, and it deserves 
         return;
       }
 
+      // Detect if we're returning from a magic link click
+      const hasHashTokens = window.location.hash && window.location.hash.includes('access_token');
+      const hasCodeParam = new URLSearchParams(window.location.search).has('code');
+      const isReturningFromMagicLink = hasHashTokens || hasCodeParam;
+
       // Listen for auth state changes (handles magic link callback + returning sessions)
       supabase.auth.onAuthStateChange((event, session) => {
         console.log('Auth event:', event);
         if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session?.user) {
+          // Clean up auth tokens from URL now that Supabase has processed them
+          if (window.location.hash && window.location.hash.includes('access_token')) {
+            history.replaceState(null, '', window.location.pathname + window.location.search);
+          }
+          if (new URLSearchParams(window.location.search).has('code')) {
+            history.replaceState(null, '', window.location.pathname);
+          }
           showApp(session.user);
         } else if (event === 'SIGNED_OUT') {
           showAuthGate();
         }
       });
 
-      // Fallback: check for existing session (for older Supabase versions without INITIAL_SESSION)
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        showApp(session.user);
+      // Only check for existing session when NOT in the middle of a magic link redirect
+      if (!isReturningFromMagicLink) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          showApp(session.user);
+        }
+        // If no session, auth gate is already visible by default
       }
-      // If no session, auth gate is already visible by default
+
+      // If returning from magic link but auth doesn't resolve within 5s, show auth gate
+      // (handles edge case where token is expired or invalid)
+      if (isReturningFromMagicLink) {
+        setTimeout(() => {
+          if (!appShown) {
+            history.replaceState(null, '', window.location.pathname);
+            showAuthGate();
+            const errorEl = document.getElementById('authError');
+            if (errorEl) {
+              errorEl.textContent = 'That login link has expired. Please request a new one.';
+              errorEl.classList.add('visible');
+            }
+          }
+        }, 5000);
+      }
     }
 
     // ─── UI Helpers ────────────────────────────────────────────────────
