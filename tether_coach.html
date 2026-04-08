@@ -6,7 +6,7 @@
   <title>Tether Resiliency Coach</title>
   <style>
     :root {
-      /* Base palette (define first) */
+      /* Base palette */
       --plum: #4e4a55;
       --plum-light: #5e5a65;
       --teal: #afc9cf;
@@ -45,6 +45,243 @@
       height: 100vh;
       display: flex;
       flex-direction: column;
+    }
+
+    /* ─── Auth Gate ──────────────────────────────────────────────────── */
+    .auth-gate {
+      position: fixed;
+      inset: 0;
+      background: var(--bg-primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      transition: opacity 0.3s ease;
+    }
+
+    .auth-gate.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .auth-card {
+      background: var(--bg-chat);
+      border-radius: 16px;
+      box-shadow: var(--shadow-lg);
+      padding: 40px 36px;
+      max-width: 420px;
+      width: 90%;
+      text-align: center;
+    }
+
+    .auth-logo {
+      width: 56px;
+      height: 56px;
+      background: var(--accent);
+      border-radius: 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 20px;
+    }
+
+    .auth-logo svg {
+      width: 30px;
+      height: 30px;
+      fill: white;
+    }
+
+    .auth-card h2 {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+    }
+
+    .auth-card .auth-subtitle {
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+      margin-bottom: 28px;
+    }
+
+    .auth-privacy-note {
+      background: #f7f5f0;
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-bottom: 24px;
+      text-align: left;
+    }
+
+    .auth-privacy-note .privacy-icon {
+      display: inline-block;
+      margin-right: 6px;
+      font-size: 15px;
+    }
+
+    .auth-privacy-note p {
+      font-size: 13px;
+      color: var(--text-primary);
+      line-height: 1.55;
+    }
+
+    .auth-privacy-note strong {
+      font-weight: 600;
+    }
+
+    .auth-input-group {
+      margin-bottom: 16px;
+      text-align: left;
+    }
+
+    .auth-input-group label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 6px;
+    }
+
+    .auth-input-group input {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-family: var(--font);
+      font-size: 15px;
+      color: var(--text-primary);
+      background: var(--bg-input);
+      outline: none;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+
+    .auth-input-group input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(175, 201, 207, 0.4);
+    }
+
+    .auth-input-group input::placeholder {
+      color: var(--text-secondary);
+    }
+
+    .corp-email-warning {
+      display: none;
+      background: #fff8f0;
+      border: 1px solid #f0d8b5;
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-top: 8px;
+      font-size: 12.5px;
+      color: #8a6d3b;
+      line-height: 1.5;
+      text-align: left;
+    }
+
+    .corp-email-warning.visible {
+      display: block;
+    }
+
+    .auth-btn {
+      width: 100%;
+      padding: 13px 20px;
+      border: none;
+      border-radius: var(--radius);
+      background: var(--accent);
+      color: white;
+      font-family: var(--font);
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+      margin-top: 8px;
+    }
+
+    .auth-btn:hover { background: var(--accent-hover); }
+    .auth-btn:active { transform: scale(0.98); }
+    .auth-btn:disabled {
+      background: var(--border);
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .auth-error {
+      display: none;
+      color: #c0392b;
+      font-size: 13px;
+      margin-top: 10px;
+      line-height: 1.4;
+    }
+
+    .auth-error.visible {
+      display: block;
+    }
+
+    /* Check-email state */
+    .auth-check-email {
+      display: none;
+    }
+
+    .auth-check-email.visible {
+      display: block;
+    }
+
+    .auth-email-form.hidden {
+      display: none;
+    }
+
+    .check-email-icon {
+      width: 64px;
+      height: 64px;
+      background: #eef6f5;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 16px;
+    }
+
+    .check-email-icon svg {
+      width: 32px;
+      height: 32px;
+      stroke: var(--accent);
+      fill: none;
+    }
+
+    .check-email-text {
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.55;
+      margin-bottom: 20px;
+    }
+
+    .check-email-text strong {
+      color: var(--text-primary);
+    }
+
+    .auth-link-btn {
+      background: none;
+      border: none;
+      font-family: var(--font);
+      font-size: 13px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      text-decoration: underline;
+      padding: 4px;
+    }
+
+    .auth-link-btn:hover {
+      color: var(--text-primary);
+    }
+
+    /* ─── App Shell (hidden until auth) ─────────────────────────────── */
+    .app-shell {
+      display: none;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    .app-shell.visible {
+      display: flex;
     }
 
     /* Header */
@@ -87,6 +324,39 @@
       font-size: 13px;
       color: var(--text-secondary);
       line-height: 1.3;
+    }
+
+    .header-right {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .user-badge {
+      font-size: 12px;
+      color: var(--text-secondary);
+      max-width: 160px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .logout-btn {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-family: var(--font);
+      font-size: 12px;
+      color: var(--text-secondary);
+      padding: 5px 10px;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .logout-btn:hover {
+      background: #f5f0ea;
+      color: var(--text-primary);
     }
 
     /* Chat Area */
@@ -256,6 +526,8 @@
       .input-area { padding: 12px 16px; }
       .header { padding: 12px 16px; }
       .message { max-width: 100%; }
+      .auth-card { padding: 28px 24px; }
+      .user-badge { display: none; }
     }
   </style>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -264,46 +536,140 @@
 </head>
 <body>
 
-  <!-- Header -->
-  <div class="header">
-    <div class="header-icon">
-      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
-      </svg>
-    </div>
-    <div class="header-text">
-      <h1>Tether Resiliency Coach</h1>
-      <p>Navigate change with clarity and confidence</p>
+  <!-- ─── AUTH GATE ──────────────────────────────────────────────────── -->
+  <div class="auth-gate" id="authGate">
+    <div class="auth-card">
+      <div class="auth-logo">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+        </svg>
+      </div>
+
+      <h2>Tether Resiliency Coach</h2>
+      <p class="auth-subtitle">Navigate change with clarity and confidence</p>
+
+      <!-- Email form -->
+      <div class="auth-email-form" id="authEmailForm">
+        <div class="auth-privacy-note">
+          <p>
+            <span class="privacy-icon">&#128274;</span>
+            <strong>Your conversations are private.</strong>
+            Use a personal email so your employer never has access to what you share here. Your company only receives anonymous, aggregate insights — never individual conversations.
+          </p>
+        </div>
+
+        <div class="auth-input-group">
+          <label for="authEmail">Personal email address</label>
+          <input
+            type="email"
+            id="authEmail"
+            placeholder="you@gmail.com"
+            autocomplete="email"
+            oninput="checkCorporateEmail(this.value)"
+            onkeydown="if(event.key==='Enter'){event.preventDefault();handleMagicLink();}"
+          >
+          <div class="corp-email-warning" id="corpWarning">
+            This looks like a work email. For your privacy, we recommend using a personal email (Gmail, Yahoo, iCloud, Outlook.com, etc.) so your employer cannot access your conversations.
+          </div>
+        </div>
+
+        <div class="auth-error" id="authError"></div>
+
+        <button class="auth-btn" id="authBtn" onclick="handleMagicLink()">
+          Send me a login link
+        </button>
+      </div>
+
+      <!-- Check-email confirmation -->
+      <div class="auth-check-email" id="authCheckEmail">
+        <div class="check-email-icon">
+          <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="4" width="20" height="16" rx="2"/>
+            <path d="M22 4L12 13L2 4"/>
+          </svg>
+        </div>
+        <h2>Check your email</h2>
+        <p class="check-email-text">
+          We sent a login link to <strong id="sentEmailDisplay"></strong>.<br>
+          Click the link in that email to start your session.
+        </p>
+        <p class="check-email-text" style="font-size:12.5px;">
+          Didn't get it? Check your spam folder, or
+          <button class="auth-link-btn" onclick="resetAuthForm()">try a different email</button>.
+        </p>
+      </div>
     </div>
   </div>
 
-  <!-- Chat -->
-  <div class="chat-container" id="chatContainer"></div>
+  <!-- ─── APP SHELL (hidden until authenticated) ─────────────────── -->
+  <div class="app-shell" id="appShell">
 
-  <!-- Input -->
-  <div class="input-area">
-    <div class="input-wrapper">
-      <textarea
-        id="userInput"
-        placeholder="Type your message..."
-        rows="1"
-        onkeydown="handleKeyDown(event)"
-        oninput="autoResize(this)"
-      ></textarea>
-      <button class="send-btn" id="sendBtn" onclick="sendMessage()">
-        <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
-      </button>
+    <!-- Header -->
+    <div class="header">
+      <div class="header-icon">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+        </svg>
+      </div>
+      <div class="header-text">
+        <h1>Tether Resiliency Coach</h1>
+        <p>Navigate change with clarity and confidence</p>
+      </div>
+      <div class="header-right">
+        <span class="user-badge" id="userBadge"></span>
+        <button class="logout-btn" onclick="handleLogout()">Sign out</button>
+      </div>
+    </div>
+
+    <!-- Chat -->
+    <div class="chat-container" id="chatContainer"></div>
+
+    <!-- Input -->
+    <div class="input-area">
+      <div class="input-wrapper">
+        <textarea
+          id="userInput"
+          placeholder="Type your message..."
+          rows="1"
+          onkeydown="handleKeyDown(event)"
+          oninput="autoResize(this)"
+        ></textarea>
+        <button class="send-btn" id="sendBtn" onclick="sendMessage()">
+          <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Disclaimer -->
+    <div class="disclaimer">
+      Tether Resiliency Coach is a coaching tool, not therapy or crisis support. If you're in crisis, contact 988 Suicide &amp; Crisis Lifeline.
     </div>
   </div>
 
-  <!-- Disclaimer -->
-  <div class="disclaimer">
-    Tether Resiliency Coach is a coaching tool, not therapy or crisis support. If you're in crisis, contact 988 Suicide & Crisis Lifeline.
-  </div>
+  <!-- ─── Supabase JS Client ────────────────────────────────────────── -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
   <script>
-    // ─── Configuration ─────────────────────────────────────────────────
-    const SUPABASE_EDGE_URL = 'https://ylufotpafbmhhjffovpf.supabase.co/functions/v1/chat';
+    // ─── Supabase Configuration ────────────────────────────────────────
+    const SUPABASE_URL = 'https://ylufotpafbmhhjffovpf.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlsdWZvdHBhZmJtaGhqZmZvdnBmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0NDI1OTMsImV4cCI6MjA5MTAxODU5M30.biYCZXpP_7k5iBTGTWoZc7gA3cY6IlKTTRUP3ZXLppU';
+    const SUPABASE_EDGE_URL = SUPABASE_URL + '/functions/v1/chat';
+
+    // Initialize Supabase client (session auto-persists in localStorage)
+    let supabase;
+    try {
+      supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    } catch (e) {
+      console.error('Failed to initialize Supabase client:', e);
+    }
+
+    // ─── Auth State ────────────────────────────────────────────────────
+    let currentUser = null;
+    let appShown = false; // Guard against double showApp() calls
+
+    // ─── Chat State ────────────────────────────────────────────────────
+    let conversationHistory = [];
+    let isStreaming = false;
 
     const SYSTEM_PROMPT = `You are the Tether Resiliency Coach — a proactive, psychology-informed coaching tool that helps employees navigate organizational change with clarity, confidence, and resilience.
 
@@ -396,14 +762,168 @@ If a user describes any of the following, acknowledge the importance of what the
 
 Use language like: "What you're describing is really important, and it deserves more support than I can offer. I'd encourage you to reach out to [your EAP / a licensed counselor / HR] — they're equipped to help with this in a way I'm not." And offer the local crisis hotline information.`;
 
-    // ─── State ─────────────────────────────────────────────────────────
-    let conversationHistory = [];
-    let isStreaming = false;
+    // ─── Corporate Email Detection ─────────────────────────────────────
+    const PERSONAL_DOMAINS = new Set([
+      'gmail.com', 'googlemail.com',
+      'yahoo.com', 'yahoo.co.uk', 'yahoo.ca', 'yahoo.com.au',
+      'outlook.com', 'hotmail.com', 'live.com', 'msn.com',
+      'icloud.com', 'me.com', 'mac.com',
+      'aol.com',
+      'protonmail.com', 'proton.me', 'pm.me',
+      'zoho.com', 'zohomail.com',
+      'fastmail.com',
+      'tutanota.com', 'tuta.io',
+      'yandex.com', 'yandex.ru',
+      'mail.com', 'email.com',
+      'gmx.com', 'gmx.net',
+      'hey.com',
+      'duck.com',
+      'mailbox.org',
+      'posteo.de', 'posteo.net',
+    ]);
 
-    // ─── Initialize ────────────────────────────────────────────────────
-    window.addEventListener('DOMContentLoaded', () => {
-      addCoachMessage("Hi — I'm the Tether Resiliency Coach. I'm here to help you navigate whatever's shifting at work right now, whether that's a reorg, a new role, a process change, or just the general feeling of \"everything is different and I'm not sure what to do.\"\n\nWhat's on your mind?");
-    });
+    function isPersonalEmail(email) {
+      const domain = email.split('@')[1]?.toLowerCase();
+      if (!domain) return true; // no domain yet, don't warn
+      return PERSONAL_DOMAINS.has(domain);
+    }
+
+    function checkCorporateEmail(value) {
+      const warning = document.getElementById('corpWarning');
+      if (!value || !value.includes('@')) {
+        warning.classList.remove('visible');
+        return;
+      }
+      if (isPersonalEmail(value)) {
+        warning.classList.remove('visible');
+      } else {
+        warning.classList.add('visible');
+      }
+    }
+
+    // ─── Auth Flow ─────────────────────────────────────────────────────
+    async function handleMagicLink() {
+      const emailInput = document.getElementById('authEmail');
+      const authBtn = document.getElementById('authBtn');
+      const authError = document.getElementById('authError');
+      const email = emailInput.value.trim().toLowerCase();
+
+      // Validate
+      if (!email || !email.includes('@') || !email.includes('.')) {
+        authError.textContent = 'Please enter a valid email address.';
+        authError.classList.add('visible');
+        return;
+      }
+
+      authError.classList.remove('visible');
+      authBtn.disabled = true;
+      authBtn.textContent = 'Sending...';
+
+      try {
+        const { error } = await supabase.auth.signInWithOtp({
+          email: email,
+          options: {
+            shouldCreateUser: true,
+            emailRedirectTo: window.location.origin + window.location.pathname,
+          }
+        });
+
+        if (error) throw error;
+
+        // Show "check your email" state
+        document.getElementById('sentEmailDisplay').textContent = email;
+        document.getElementById('authEmailForm').classList.add('hidden');
+        document.getElementById('authCheckEmail').classList.add('visible');
+
+      } catch (err) {
+        console.error('Magic link error:', err);
+        authError.textContent = err.message || 'Something went wrong. Please try again.';
+        authError.classList.add('visible');
+      } finally {
+        authBtn.disabled = false;
+        authBtn.textContent = 'Send me a login link';
+      }
+    }
+
+    function resetAuthForm() {
+      document.getElementById('authEmailForm').classList.remove('hidden');
+      document.getElementById('authCheckEmail').classList.remove('visible');
+      document.getElementById('authError').classList.remove('visible');
+      document.getElementById('authError').textContent = '';
+      document.getElementById('corpWarning').classList.remove('visible');
+      document.getElementById('authEmail').value = '';
+      document.getElementById('authEmail').focus();
+    }
+
+    async function handleLogout() {
+      await supabase.auth.signOut();
+      currentUser = null;
+      conversationHistory = [];
+      document.getElementById('chatContainer').innerHTML = '';
+      showAuthGate();
+    }
+
+    function showAuthGate() {
+      appShown = false;
+      document.getElementById('authGate').classList.remove('hidden');
+      document.getElementById('appShell').classList.remove('visible');
+      resetAuthForm();
+    }
+
+    function showApp(user) {
+      // Guard: prevent calling this twice (race between onAuthStateChange and getSession)
+      if (appShown) return;
+      appShown = true;
+
+      currentUser = user;
+      document.getElementById('authGate').classList.add('hidden');
+      document.getElementById('appShell').classList.add('visible');
+
+      // Clean up auth hash from URL (magic link leaves tokens in fragment)
+      if (window.location.hash && window.location.hash.includes('access_token')) {
+        history.replaceState(null, '', window.location.pathname + window.location.search);
+      }
+
+      // Show email badge in header
+      const badge = document.getElementById('userBadge');
+      if (user.email) {
+        badge.textContent = user.email;
+      }
+
+      // Show welcome message (only if chat is empty)
+      if (document.getElementById('chatContainer').children.length === 0) {
+        addCoachMessage("Hi — I'm the Tether Resiliency Coach. I'm here to help you navigate whatever's shifting at work right now, whether that's a reorg, a new role, a process change, or just the general feeling of \"everything is different and I'm not sure what to do.\"\n\nWhat's on your mind?");
+      }
+
+      document.getElementById('userInput').focus();
+    }
+
+    // ─── Initialize: Check Session on Load ─────────────────────────────
+    async function initAuth() {
+      // Guard: ensure Supabase client initialized
+      if (!supabase) {
+        console.error('Supabase JS client failed to load or initialize.');
+        document.querySelector('.auth-subtitle').textContent = 'Unable to connect. Please refresh the page.';
+        return;
+      }
+
+      // Listen for auth state changes (handles magic link callback + returning sessions)
+      supabase.auth.onAuthStateChange((event, session) => {
+        console.log('Auth event:', event);
+        if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session?.user) {
+          showApp(session.user);
+        } else if (event === 'SIGNED_OUT') {
+          showAuthGate();
+        }
+      });
+
+      // Fallback: check for existing session (for older Supabase versions without INITIAL_SESSION)
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        showApp(session.user);
+      }
+      // If no session, auth gate is already visible by default
+    }
 
     // ─── UI Helpers ────────────────────────────────────────────────────
     function addUserMessage(text) {
@@ -476,7 +996,6 @@ Use language like: "What you're describing is really important, and it deserves 
     }
 
     function formatText(text) {
-      // Convert markdown-like formatting to HTML
       return escapeHtml(text)
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
         .replace(/\n\n/g, '</p><p>')
@@ -497,7 +1016,7 @@ Use language like: "What you're describing is really important, and it deserves 
       }
     }
 
-    // ─── Send Message ──────────────────────────────────────────────────
+    // ─── Send Message (now includes user_id for persistent memory) ────
     async function sendMessage() {
       const input = document.getElementById('userInput');
       const sendBtn = document.getElementById('sendBtn');
@@ -520,12 +1039,26 @@ Use language like: "What you're describing is really important, and it deserves 
       let fullResponse = '';
 
       try {
+        // Get fresh session (handles token refresh automatically)
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          // Session expired — redirect back to auth
+          updateStreamingMessage("Your session has expired. Please sign in again.");
+          finalizeStreamingMessage();
+          setTimeout(() => showAuthGate(), 2000);
+          return;
+        }
+
         const response = await fetch(SUPABASE_EDGE_URL, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + session.access_token,
+          },
           body: JSON.stringify({
             system: SYSTEM_PROMPT,
             messages: conversationHistory,
+            user_id: currentUser?.id || null,
           }),
         });
 
@@ -581,6 +1114,9 @@ Use language like: "What you're describing is really important, and it deserves 
         input.focus();
       }
     }
+
+    // ─── Boot ──────────────────────────────────────────────────────────
+    window.addEventListener('DOMContentLoaded', initAuth);
   </script>
 </body>
 </html>
