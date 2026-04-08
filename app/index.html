@@ -13,78 +13,90 @@
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
-    --ink: #0f1417; --slate: #2c3a45; --tether: #1a6b5e;
-    --tether-light: #2a8f7e; --white: #ffffff;
+    --ink: #4e4a55; --slate: #5e5a65; --tether: #afc9cf;
+    --tether-light: #bfdcdc; --white: #ffffff;
+    --plum: #4e4a55; --plum-light: #5e5a65; --teal: #afc9cf;
+    --sage: #bfdcdc; --mauve: #998193; --sand: #ded3cc;
+    --cream: #f0ebe2; --muted: #8a8590;
   }
-  body { font-family: 'DM Sans', sans-serif; background: var(--ink); color: var(--white); height: 100vh; height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
+  body { font-family: 'DM Sans', sans-serif; background: var(--cream); color: var(--plum); height: 100vh; height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
   .screen { display: none; flex-direction: column; height: 100vh; height: 100dvh; }
   .screen.active { display: flex; }
-  #auth-screen { justify-content: center; align-items: center; padding: 32px 24px; background: linear-gradient(160deg, #0f1417 0%, #1a2a25 100%); }
+  #auth-screen { justify-content: center; align-items: center; padding: 32px 24px; background: linear-gradient(135deg, var(--cream) 0%, var(--sand) 100%); }
   .auth-logo { text-align: center; margin-bottom: 40px; }
-  .auth-logo h1 { font-family: 'Playfair Display', serif; font-size: 36px; font-weight: 600; color: var(--white); letter-spacing: -0.5px; }
-  .auth-logo h1 span { color: var(--tether-light); }
-  .auth-logo p { font-size: 13px; color: rgba(255,255,255,0.45); margin-top: 8px; letter-spacing: 1.5px; text-transform: uppercase; }
-  .auth-card { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 32px 28px; width: 100%; max-width: 380px; }
-  .auth-tabs { display: flex; gap: 4px; background: rgba(255,255,255,0.05); border-radius: 8px; padding: 4px; margin-bottom: 28px; }
-  .auth-tab { flex: 1; padding: 8px; border: none; border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500; cursor: pointer; background: transparent; color: rgba(255,255,255,0.45); transition: all 0.2s; }
-  .auth-tab.active { background: var(--tether); color: var(--white); }
+  .auth-logo h1 { font-family: 'Playfair Display', serif; font-size: 36px; font-weight: 600; color: var(--plum); letter-spacing: -0.5px; }
+  .auth-logo h1 span { color: var(--teal); }
+  .auth-logo p { font-size: 13px; color: var(--muted); margin-top: 8px; letter-spacing: 1.5px; text-transform: uppercase; }
+  .auth-card { background: #ffffff; border: 1px solid var(--sand); border-radius: 16px; padding: 32px 28px; width: 100%; max-width: 380px; box-shadow: 0 12px 48px rgba(78,74,85,0.12); }
+  .auth-privacy-box { background: #f7f5f0; border: 1px solid var(--sand); border-radius: 10px; padding: 14px 16px; margin-bottom: 24px; text-align: left; }
+  .auth-privacy-box p { font-size: 13px; color: var(--plum); line-height: 1.55; }
+  .auth-privacy-box strong { color: var(--plum); font-weight: 600; }
+  .corp-email-warning { display: none; background: #fff8f0; border: 1px solid #f0d8b5; border-radius: 8px; padding: 10px 12px; margin-top: 8px; font-size: 12px; color: #8a6d3b; line-height: 1.5; text-align: left; }
+  .check-email-section { display: none; text-align: center; }
+  .check-email-icon { width: 56px; height: 56px; background: #eef6f5; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 16px; }
+  .check-email-icon svg { width: 28px; height: 28px; stroke: var(--teal); fill: none; }
+  .check-email-section h3 { font-family: 'Playfair Display', serif; font-size: 20px; font-weight: 600; color: var(--plum); margin-bottom: 10px; }
+  .check-email-section p { font-size: 13px; color: var(--muted); line-height: 1.55; margin-bottom: 16px; }
+  .check-email-section strong { color: var(--plum); }
+  .auth-link-btn { background: none; border: none; font-family: 'DM Sans', sans-serif; font-size: 12px; color: var(--muted); cursor: pointer; text-decoration: underline; padding: 4px; }
+  .auth-link-btn:hover { color: var(--plum); }
   .form-group { margin-bottom: 16px; }
-  .form-group label { display: block; font-size: 12px; font-weight: 500; color: rgba(255,255,255,0.55); margin-bottom: 6px; letter-spacing: 0.5px; text-transform: uppercase; }
-  .form-group input { width: 100%; padding: 12px 14px; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; color: var(--white); font-family: 'DM Sans', sans-serif; font-size: 14px; outline: none; transition: border 0.2s; }
-  .form-group input:focus { border-color: var(--tether-light); }
-  .form-group input::placeholder { color: rgba(255,255,255,0.25); }
-  .auth-btn { width: 100%; padding: 14px; background: var(--tether); border: none; border-radius: 8px; color: var(--white); font-family: 'DM Sans', sans-serif; font-size: 15px; font-weight: 500; cursor: pointer; margin-top: 8px; transition: background 0.2s; }
-  .auth-btn:hover { background: var(--tether-light); }
-  .auth-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-  .auth-privacy { font-size: 11px; color: rgba(255,255,255,0.3); text-align: center; margin-top: 20px; line-height: 1.6; }
-  .auth-error { font-size: 12px; color: #e57373; margin-top: 12px; text-align: center; min-height: 18px; }
-  #adkar-screen { background: linear-gradient(160deg, #0f1417 0%, #1a2a25 100%); padding: 48px 24px 32px; overflow-y: auto; }
+  .form-group label { display: block; font-size: 12px; font-weight: 600; color: var(--plum); margin-bottom: 6px; letter-spacing: 0.5px; text-transform: uppercase; }
+  .form-group input { width: 100%; padding: 12px 14px; background: #fafaf8; border: 1px solid var(--sand); border-radius: 8px; color: var(--plum); font-family: 'DM Sans', sans-serif; font-size: 14px; outline: none; transition: border 0.2s; }
+  .form-group input:focus { border-color: var(--teal); background: #fff; }
+  .form-group input::placeholder { color: var(--muted); }
+  .auth-btn { width: 100%; padding: 14px; background: var(--plum); border: none; border-radius: 8px; color: var(--white); font-family: 'DM Sans', sans-serif; font-size: 15px; font-weight: 500; cursor: pointer; margin-top: 8px; transition: opacity 0.2s; }
+  .auth-btn:hover { opacity: 0.9; }
+  .auth-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .auth-privacy { font-size: 11px; color: var(--muted); text-align: center; margin-top: 20px; line-height: 1.6; }
+  .auth-error { font-size: 12px; color: #d32f2f; margin-top: 12px; text-align: center; min-height: 18px; }
+  #adkar-screen { background: var(--cream); padding: 48px 24px 32px; overflow-y: auto; }
   .adkar-header { margin-bottom: 32px; }
-  .adkar-header h2 { font-family: 'Playfair Display', serif; font-size: 24px; font-weight: 600; color: var(--white); margin-bottom: 8px; }
-  .adkar-header p { font-size: 13px; color: rgba(255,255,255,0.5); line-height: 1.6; }
+  .adkar-header h2 { font-family: 'Playfair Display', serif; font-size: 24px; font-weight: 600; color: #1a1a1a; margin-bottom: 8px; }
+  .adkar-header p { font-size: 13px; color: #555; line-height: 1.6; }
   .adkar-question { margin-bottom: 28px; }
-  .adkar-question label { display: block; font-size: 14px; font-weight: 500; color: rgba(255,255,255,0.85); margin-bottom: 12px; line-height: 1.5; }
+  .adkar-question label { display: block; font-size: 14px; font-weight: 500; color: #1a1a1a; margin-bottom: 12px; line-height: 1.5; }
   .adkar-scale { display: flex; gap: 8px; }
-  .adkar-scale button { flex: 1; padding: 12px 4px; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.5); font-family: 'DM Sans', sans-serif; font-size: 16px; font-weight: 500; cursor: pointer; transition: all 0.2s; }
-  .adkar-scale button.selected { background: var(--tether); border-color: var(--tether); color: var(--white); }
+  .adkar-scale button { flex: 1; padding: 12px 4px; border: 1px solid var(--sand); border-radius: 8px; background: #fff; color: #555; font-family: 'DM Sans', sans-serif; font-size: 16px; font-weight: 500; cursor: pointer; transition: all 0.2s; }
+  .adkar-scale button.selected { background: var(--plum); border-color: var(--plum); color: var(--white); }
   .adkar-context { margin-bottom: 28px; }
-  .adkar-context label { display: block; font-size: 12px; font-weight: 500; color: rgba(255,255,255,0.55); margin-bottom: 8px; letter-spacing: 0.5px; text-transform: uppercase; }
-  .adkar-context select { width: 100%; padding: 12px 14px; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; color: var(--white); font-family: 'DM Sans', sans-serif; font-size: 14px; outline: none; }
-  .adkar-context select option { background: var(--ink); }
-  .adkar-btn { width: 100%; padding: 14px; background: var(--tether); border: none; border-radius: 8px; color: var(--white); font-family: 'DM Sans', sans-serif; font-size: 15px; font-weight: 500; cursor: pointer; margin-top: 8px; }
-  .adkar-skip { width: 100%; padding: 10px; background: transparent; border: none; color: rgba(255,255,255,0.3); font-family: 'DM Sans', sans-serif; font-size: 13px; cursor: pointer; margin-top: 8px; }
-  #chat-screen { background: var(--ink); }
-  .chat-header { background: rgba(255,255,255,0.04); border-bottom: 1px solid rgba(255,255,255,0.08); padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
-  .chat-header-left h2 { font-family: 'Playfair Display', serif; font-size: 20px; font-weight: 600; color: var(--white); }
-  .chat-header-left p { font-size: 11px; color: rgba(255,255,255,0.35); margin-top: 2px; }
+  .adkar-context label { display: block; font-size: 12px; font-weight: 500; color: #555; margin-bottom: 8px; letter-spacing: 0.5px; text-transform: uppercase; }
+  .adkar-context select { width: 100%; padding: 12px 14px; background: #fff; border: 1px solid var(--sand); border-radius: 8px; color: #1a1a1a; font-family: 'DM Sans', sans-serif; font-size: 14px; outline: none; }
+  .adkar-context select option { background: #fff; }
+  .adkar-btn { width: 100%; padding: 14px; background: var(--plum); border: none; border-radius: 8px; color: var(--white); font-family: 'DM Sans', sans-serif; font-size: 15px; font-weight: 500; cursor: pointer; margin-top: 8px; }
+  .adkar-skip { width: 100%; padding: 10px; background: transparent; border: none; color: var(--muted); font-family: 'DM Sans', sans-serif; font-size: 13px; cursor: pointer; margin-top: 8px; }
+  #chat-screen { background: var(--cream); }
+  .chat-header { background: #fff; border-bottom: 1px solid var(--sand); padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+  .chat-header-left h2 { font-family: 'Playfair Display', serif; font-size: 20px; font-weight: 600; color: #1a1a1a; }
+  .chat-header-left p { font-size: 11px; color: var(--muted); margin-top: 2px; }
   .header-actions { display: flex; gap: 8px; }
-  .icon-btn { background: rgba(255,255,255,0.07); border: none; border-radius: 8px; padding: 8px 12px; color: rgba(255,255,255,0.5); font-size: 12px; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.2s; }
-  .icon-btn:hover { background: rgba(255,255,255,0.12); color: var(--white); }
+  .icon-btn { background: #f5f0ea; border: 1px solid var(--sand); border-radius: 8px; padding: 8px 12px; color: var(--plum); font-size: 12px; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.2s; }
+  .icon-btn:hover { background: var(--sand); color: #1a1a1a; }
   .messages { flex: 1; overflow-y: auto; padding: 20px 16px; display: flex; flex-direction: column; gap: 16px; }
   .message { display: flex; flex-direction: column; max-width: 85%; animation: fadeIn 0.3s ease; }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
   .message.user { align-self: flex-end; }
   .message.assistant { align-self: flex-start; }
   .message-bubble { padding: 12px 16px; border-radius: 16px; font-size: 14px; line-height: 1.6; font-weight: 400; }
-  .message.user .message-bubble { background: var(--tether); color: var(--white); border-bottom-right-radius: 4px; }
-  .message.assistant .message-bubble { background: rgba(255,255,255,0.07); color: rgba(255,255,255,0.9); border-bottom-left-radius: 4px; }
-  .message-time { font-size: 10px; color: rgba(255,255,255,0.25); margin-top: 4px; padding: 0 4px; }
+  .message.user .message-bubble { background: var(--plum); color: var(--white); border-bottom-right-radius: 4px; }
+  .message.assistant .message-bubble { background: var(--sage); color: #1a1a1a; border-bottom-left-radius: 4px; }
+  .message-time { font-size: 10px; color: var(--muted); margin-top: 4px; padding: 0 4px; }
   .message.user .message-time { text-align: right; }
-  .typing-indicator { display: none; align-self: flex-start; padding: 12px 16px; background: rgba(255,255,255,0.07); border-radius: 16px; border-bottom-left-radius: 4px; margin: 0 16px; }
+  .typing-indicator { display: none; align-self: flex-start; padding: 12px 16px; background: var(--sage); border-radius: 16px; border-bottom-left-radius: 4px; margin: 0 16px; }
   .typing-indicator.visible { display: flex; gap: 4px; align-items: center; }
-  .typing-dot { width: 6px; height: 6px; background: rgba(255,255,255,0.4); border-radius: 50%; animation: typingBounce 1.2s infinite; }
+  .typing-dot { width: 6px; height: 6px; background: var(--muted); border-radius: 50%; animation: typingBounce 1.2s infinite; }
   .typing-dot:nth-child(2) { animation-delay: 0.2s; }
   .typing-dot:nth-child(3) { animation-delay: 0.4s; }
   @keyframes typingBounce { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-6px); } }
-  .chat-input-area { padding: 12px 16px 24px; border-top: 1px solid rgba(255,255,255,0.08); display: flex; gap: 10px; align-items: flex-end; flex-shrink: 0; background: var(--ink); }
-  .chat-input { flex: 1; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; padding: 12px 14px; color: var(--white); font-family: 'DM Sans', sans-serif; font-size: 14px; outline: none; resize: none; min-height: 44px; max-height: 120px; line-height: 1.5; transition: border 0.2s; }
-  .chat-input:focus { border-color: var(--tether-light); }
-  .chat-input::placeholder { color: rgba(255,255,255,0.25); }
-  .send-btn { background: var(--tether); border: none; border-radius: 10px; width: 44px; height: 44px; color: var(--white); font-size: 18px; cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center; transition: background 0.2s; }
-  .send-btn:hover { background: var(--tether-light); }
+  .chat-input-area { padding: 12px 16px 24px; border-top: 1px solid var(--sand); display: flex; gap: 10px; align-items: flex-end; flex-shrink: 0; background: #fff; }
+  .chat-input { flex: 1; background: #fafaf8; border: 1px solid var(--sand); border-radius: 12px; padding: 12px 14px; color: #1a1a1a; font-family: 'DM Sans', sans-serif; font-size: 14px; outline: none; resize: none; min-height: 44px; max-height: 120px; line-height: 1.5; transition: border 0.2s; }
+  .chat-input:focus { border-color: var(--teal); }
+  .chat-input::placeholder { color: var(--muted); }
+  .send-btn { background: var(--plum); border: none; border-radius: 10px; width: 44px; height: 44px; color: var(--white); font-size: 18px; cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center; transition: opacity 0.2s; }
+  .send-btn:hover { opacity: 0.9; }
   .send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-  .welcome-msg { text-align: center; padding: 32px 16px; color: rgba(255,255,255,0.35); font-size: 13px; line-height: 1.7; }
-  .welcome-msg strong { display: block; font-family: 'Playfair Display', serif; font-size: 18px; color: rgba(255,255,255,0.6); font-weight: 400; margin-bottom: 8px; }
+  .welcome-msg { text-align: center; padding: 32px 16px; color: var(--muted); font-size: 13px; line-height: 1.7; }
+  .welcome-msg strong { display: block; font-family: 'Playfair Display', serif; font-size: 18px; color: var(--plum); font-weight: 400; margin-bottom: 8px; }
 </style>
 </head>
 <body>
@@ -95,36 +107,36 @@
     <p>Your Private Resilience Coach</p>
   </div>
   <div class="auth-card">
-    <div class="auth-tabs">
-      <button class="auth-tab active" onclick="showTab('signin')">Sign In</button>
-      <button class="auth-tab" onclick="showTab('signup')">Sign Up</button>
-    </div>
-    <div id="signin-form">
-      <div class="form-group">
-        <label>Email</label>
-        <input type="email" id="signin-email" placeholder="your@email.com" autocomplete="email">
-      </div>
-      <div class="form-group">
-        <label>Password</label>
-        <input type="password" id="signin-password" placeholder="••••••••" autocomplete="current-password">
-      </div>
-      <button class="auth-btn" onclick="handleSignIn()">Sign In</button>
-    </div>
-    <div id="signup-form" style="display:none">
-      <div class="form-group">
-        <label>First Name (optional)</label>
-        <input type="text" id="signup-name" placeholder="What should Tether call you?">
+    <!-- Magic Link Form -->
+    <div id="magic-form">
+      <div class="auth-privacy-box">
+        <p>&#128274; <strong>Your conversations are private.</strong> Use a personal email so your employer never has access to what you share here. Your company only receives anonymous, aggregate insights.</p>
       </div>
       <div class="form-group">
         <label>Personal Email</label>
-        <input type="email" id="signup-email" placeholder="Use personal email for privacy">
+        <input type="email" id="magic-email" placeholder="you@gmail.com" autocomplete="email"
+          oninput="checkCorporateEmail(this.value)"
+          onkeydown="if(event.key==='Enter'){event.preventDefault();handleMagicLink();}">
+        <div class="corp-email-warning" id="corp-email-warning">
+          This looks like a work email. For your privacy, we recommend using a personal email (Gmail, Yahoo, iCloud, etc.) so your employer cannot access your conversations.
+        </div>
       </div>
-      <div class="form-group">
-        <label>Password</label>
-        <input type="password" id="signup-password" placeholder="At least 8 characters" autocomplete="new-password">
-      </div>
-      <button class="auth-btn" onclick="handleSignUp()">Create Account</button>
+      <button class="auth-btn" id="magic-btn" onclick="handleMagicLink()">Send me a login link</button>
     </div>
+
+    <!-- Check Email Confirmation -->
+    <div class="check-email-section" id="check-email">
+      <div class="check-email-icon">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="4" width="20" height="16" rx="2"/>
+          <path d="M22 4L12 13L2 4"/>
+        </svg>
+      </div>
+      <h3>Check your email</h3>
+      <p>We sent a login link to <strong id="sent-email-display"></strong>.<br>Click the link in that email to start your session.</p>
+      <p style="font-size:12px;">Didn't get it? Check spam, or <button class="auth-link-btn" onclick="resetMagicForm()">try a different email</button></p>
+    </div>
+
     <div class="auth-error" id="auth-error"></div>
     <p class="auth-privacy">Your conversations are completely private.<br>Your employer cannot see your sessions. Ever.</p>
   </div>
