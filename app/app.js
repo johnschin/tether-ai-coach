@@ -117,6 +117,26 @@ async function startUserSession() {
   const name = currentUser.user_metadata?.preferred_name || currentUser.email?.split('@')[0];
   if (name) document.getElementById('user-greeting').textContent = `Hi ${name} — your session is private`;
   await initSession(currentUser.id);
+
+  // Check if returning user (has previous sessions) and set welcome message accordingly
+  let isReturning = false;
+  try {
+    const { data } = await supabaseClient
+      .from('session_summaries')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', currentUser.id);
+    isReturning = data && data.length > 0;
+  } catch (e) { console.error('Could not check session history:', e); }
+
+  const welcomeEl = document.querySelector('#messages .welcome-msg');
+  if (welcomeEl) {
+    if (isReturning) {
+      welcomeEl.innerHTML = `<strong>Welcome back.</strong> Whatever brought you here today — you're in the right place. What's on your mind?`;
+    } else {
+      welcomeEl.innerHTML = `<strong>Hi — I'm Tether, your resilience coach.</strong> I'm here to help you navigate whatever's shifting at work right now, whether that's a reorg, a new role, a process change, or just the general feeling of "everything is different and I'm not sure what to do." What's on your mind?`;
+    }
+  }
+
   showScreen('adkar-screen');
 }
 
@@ -176,7 +196,15 @@ function addMessage(role, content) {
   const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   div.innerHTML = `<div class="message-bubble">${content}</div><div class="message-time">${time}</div>`;
   messages.appendChild(div);
-  messages.scrollTop = messages.scrollHeight;
+
+  // For user messages, scroll to bottom so they can see their own message fully.
+  // For assistant messages, scroll to the TOP of the new bubble so the user
+  // reads from the beginning and can scroll down.
+  if (role === 'user') {
+    messages.scrollTop = messages.scrollHeight;
+  } else {
+    div.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 }
 function showTyping(visible) {
   document.getElementById('typing').classList.toggle('visible', visible);
