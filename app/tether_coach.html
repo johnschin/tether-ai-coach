@@ -913,9 +913,9 @@
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlsdWZvdHBhZmJtaGhqZmZvdnBmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0NDI1OTMsImV4cCI6MjA5MTAxODU5M30.biYCZXpP_7k5iBTGTWoZc7gA3cY6IlKTTRUP3ZXLppU';
     const SUPABASE_EDGE_URL = SUPABASE_URL + '/functions/v1/chat';
 
-    let supabase;
+    let supabaseClient;
     try {
-      supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
         auth: {
           flowType: 'implicit',
           detectSessionInUrl: true,
@@ -1090,7 +1090,7 @@ Use language like: "What you're describing is really important, and it deserves 
       authBtn.textContent = 'Sending...';
 
       try {
-        const { error } = await supabase.auth.signInWithOtp({
+        const { error } = await supabaseClient.auth.signInWithOtp({
           email: email,
           options: {
             shouldCreateUser: true,
@@ -1125,7 +1125,7 @@ Use language like: "What you're describing is really important, and it deserves 
     }
 
     async function handleLogout() {
-      await supabase.auth.signOut();
+      await supabaseClient.auth.signOut();
       currentUser = null;
       appShown = false;
       conversationHistory = [];
@@ -1167,7 +1167,7 @@ Use language like: "What you're describing is really important, and it deserves 
 
     // ========== Initialize Auth ==========
     async function initAuth() {
-      if (!supabase) {
+      if (!supabaseClient) {
         console.error('Supabase JS client failed to load or initialize.');
         return;
       }
@@ -1176,7 +1176,7 @@ Use language like: "What you're describing is really important, and it deserves 
       const hasCodeParam = new URLSearchParams(window.location.search).has('code');
       const isReturningFromMagicLink = hasHashTokens || hasCodeParam;
 
-      supabase.auth.onAuthStateChange((event, session) => {
+      supabaseClient.auth.onAuthStateChange((event, session) => {
         console.log('Auth event:', event);
         if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session?.user) {
           if (window.location.hash && window.location.hash.includes('access_token')) {
@@ -1192,7 +1192,7 @@ Use language like: "What you're describing is really important, and it deserves 
       });
 
       if (!isReturningFromMagicLink) {
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { session } } = await supabaseClient.auth.getSession();
         if (session?.user) {
           showApp(session.user);
         }
@@ -1309,7 +1309,7 @@ Use language like: "What you're describing is really important, and it deserves 
       let fullResponse = '';
 
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { session } } = await supabaseClient.auth.getSession();
         if (!session) {
           updateStreamingMessage("Your session has expired. Please sign in again.");
           finalizeStreamingMessage();
