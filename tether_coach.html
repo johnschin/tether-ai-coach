@@ -4,9 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Tether Resiliency Coach</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      /* Base palette */
       --plum: #4e4a55;
       --plum-light: #5e5a65;
       --teal: #afc9cf;
@@ -16,8 +18,6 @@
       --cream: #f0ebe2;
       --cream-dark: #e5dfd5;
       --muted: #8a8590;
-
-      /* Derived theme tokens */
       --bg-primary: #f0ebe2;
       --bg-chat: #ffffff;
       --bg-input: #fafaf8;
@@ -42,12 +42,262 @@
       font-family: var(--font);
       background: var(--bg-primary);
       color: var(--text-primary);
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
     }
 
-    /* ─── Auth Gate ──────────────────────────────────────────────────── */
+    .hidden { display: none !important; }
+
+    /* ========== LANDING PAGE ========== */
+    .landing-page {
+      z-index: 200;
+      position: relative;
+      background: var(--bg-primary);
+      min-height: 100vh;
+    }
+
+    .landing-nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 32px;
+      max-width: 1080px;
+      margin: 0 auto;
+    }
+
+    .landing-nav-brand {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .nav-icon {
+      width: 36px;
+      height: 36px;
+      background: var(--accent);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .nav-icon svg { width: 20px; height: 20px; fill: white; }
+
+    .landing-nav-cta {
+      padding: 10px 24px;
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: var(--radius);
+      font-family: var(--font);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .landing-nav-cta:hover { background: var(--accent-hover); }
+
+    .landing-hero {
+      max-width: 820px;
+      margin: 0 auto;
+      padding: 64px 32px 48px;
+      text-align: center;
+    }
+
+    .landing-hero h1 {
+      font-size: 44px;
+      font-weight: 700;
+      color: var(--text-primary);
+      line-height: 1.15;
+      margin-bottom: 20px;
+      letter-spacing: -0.5px;
+    }
+
+    .landing-hero h1 em { font-style: normal; color: #7a9ea6; }
+
+    .landing-hero .hero-sub {
+      font-size: 18px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      max-width: 620px;
+      margin: 0 auto 36px;
+    }
+
+    .landing-hero-cta {
+      display: inline-block;
+      padding: 16px 40px;
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: var(--radius);
+      font-family: var(--font);
+      font-size: 17px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+    }
+
+    .landing-hero-cta:hover { background: var(--accent-hover); }
+    .landing-hero-cta:active { transform: scale(0.98); }
+
+    .landing-section {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 48px 32px;
+    }
+
+    .landing-section-label {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: #7a9ea6;
+      margin-bottom: 12px;
+    }
+
+    .landing-section h2 {
+      font-size: 30px;
+      font-weight: 700;
+      color: var(--text-primary);
+      line-height: 1.25;
+      margin-bottom: 20px;
+    }
+
+    .landing-section p.section-body {
+      font-size: 16px;
+      color: var(--text-secondary);
+      line-height: 1.7;
+      max-width: 700px;
+      margin-bottom: 32px;
+    }
+
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+      margin-bottom: 16px;
+    }
+
+    .stat-card {
+      background: white;
+      border-radius: 14px;
+      padding: 28px 24px;
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+    }
+
+    .stat-number {
+      font-size: 40px;
+      font-weight: 700;
+      color: var(--text-primary);
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+
+    .stat-label {
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    .stat-source {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 16px;
+    }
+
+    .stat-source a { color: var(--muted); text-decoration: underline; }
+
+    .contrast-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin-top: 28px;
+    }
+
+    .contrast-card {
+      background: white;
+      border-radius: 14px;
+      padding: 28px 24px;
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+    }
+
+    .contrast-card.highlight {
+      background: var(--accent);
+      color: white;
+      border-color: var(--accent);
+    }
+
+    .contrast-card h3 { font-size: 18px; font-weight: 700; margin-bottom: 12px; }
+    .contrast-card.highlight h3 { color: white; }
+    .contrast-card p { font-size: 14px; line-height: 1.65; color: var(--text-secondary); }
+    .contrast-card.highlight p { color: rgba(255,255,255,0.85); }
+
+    .case-study {
+      background: white;
+      border-radius: 14px;
+      padding: 36px 32px;
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+      margin-top: 28px;
+      max-width: 700px;
+    }
+
+    .case-study-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: #7a9ea6;
+      margin-bottom: 16px;
+    }
+
+    .case-study blockquote {
+      font-size: 17px;
+      line-height: 1.7;
+      color: var(--text-primary);
+      font-style: italic;
+      margin-bottom: 16px;
+    }
+
+    .case-study .case-attribution {
+      font-size: 13px;
+      color: var(--text-secondary);
+      font-style: normal;
+    }
+
+    .landing-bottom-cta {
+      text-align: center;
+      padding: 56px 32px 72px;
+    }
+
+    .landing-bottom-cta h2 {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 16px;
+    }
+
+    .landing-bottom-cta p {
+      font-size: 15px;
+      color: var(--text-secondary);
+      margin-bottom: 28px;
+    }
+
+    .landing-footer {
+      text-align: center;
+      padding: 24px 32px;
+      font-size: 12px;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+      max-width: 960px;
+      margin: 0 auto;
+    }
+
+    /* ========== AUTH GATE ========== */
     .auth-gate {
       position: fixed;
       inset: 0;
@@ -57,11 +307,6 @@
       justify-content: center;
       z-index: 100;
       transition: opacity 0.3s ease;
-    }
-
-    .auth-gate.hidden {
-      opacity: 0;
-      pointer-events: none;
     }
 
     .auth-card {
@@ -85,11 +330,7 @@
       margin-bottom: 20px;
     }
 
-    .auth-logo svg {
-      width: 30px;
-      height: 30px;
-      fill: white;
-    }
+    .auth-logo svg { width: 30px; height: 30px; fill: white; }
 
     .auth-card h2 {
       font-size: 22px;
@@ -113,21 +354,13 @@
       text-align: left;
     }
 
-    .auth-privacy-note .privacy-icon {
-      display: inline-block;
-      margin-right: 6px;
-      font-size: 15px;
-    }
-
     .auth-privacy-note p {
       font-size: 13px;
       color: var(--text-primary);
       line-height: 1.55;
     }
 
-    .auth-privacy-note strong {
-      font-weight: 600;
-    }
+    .auth-privacy-note strong { font-weight: 600; }
 
     .auth-input-group {
       margin-bottom: 16px;
@@ -160,9 +393,7 @@
       box-shadow: 0 0 0 3px rgba(175, 201, 207, 0.4);
     }
 
-    .auth-input-group input::placeholder {
-      color: var(--text-secondary);
-    }
+    .auth-input-group input::placeholder { color: var(--text-secondary); }
 
     .corp-email-warning {
       display: none;
@@ -177,9 +408,7 @@
       text-align: left;
     }
 
-    .corp-email-warning.visible {
-      display: block;
-    }
+    .corp-email-warning.visible { display: block; }
 
     .auth-btn {
       width: 100%;
@@ -198,11 +427,7 @@
 
     .auth-btn:hover { background: var(--accent-hover); }
     .auth-btn:active { transform: scale(0.98); }
-    .auth-btn:disabled {
-      background: var(--border);
-      cursor: not-allowed;
-      transform: none;
-    }
+    .auth-btn:disabled { background: var(--border); cursor: not-allowed; transform: none; }
 
     .auth-error {
       display: none;
@@ -212,22 +437,11 @@
       line-height: 1.4;
     }
 
-    .auth-error.visible {
-      display: block;
-    }
+    .auth-error.visible { display: block; }
 
-    /* Check-email state */
-    .auth-check-email {
-      display: none;
-    }
-
-    .auth-check-email.visible {
-      display: block;
-    }
-
-    .auth-email-form.hidden {
-      display: none;
-    }
+    .auth-check-email { display: none; }
+    .auth-check-email.visible { display: block; }
+    .auth-email-form.hidden { display: none; }
 
     .check-email-icon {
       width: 64px;
@@ -240,12 +454,7 @@
       margin-bottom: 16px;
     }
 
-    .check-email-icon svg {
-      width: 32px;
-      height: 32px;
-      stroke: var(--accent);
-      fill: none;
-    }
+    .check-email-icon svg { width: 32px; height: 32px; stroke: var(--accent); fill: none; }
 
     .check-email-text {
       font-size: 14px;
@@ -254,9 +463,7 @@
       margin-bottom: 20px;
     }
 
-    .check-email-text strong {
-      color: var(--text-primary);
-    }
+    .check-email-text strong { color: var(--text-primary); }
 
     .auth-link-btn {
       background: none;
@@ -269,22 +476,17 @@
       padding: 4px;
     }
 
-    .auth-link-btn:hover {
-      color: var(--text-primary);
-    }
+    .auth-link-btn:hover { color: var(--text-primary); }
 
-    /* ─── App Shell (hidden until auth) ─────────────────────────────── */
+    /* ========== APP SHELL ========== */
     .app-shell {
       display: none;
       flex-direction: column;
       height: 100vh;
     }
 
-    .app-shell.visible {
-      display: flex;
-    }
+    .app-shell.visible { display: flex; }
 
-    /* Header */
     .header {
       background: var(--bg-chat);
       border-bottom: 1px solid var(--border);
@@ -307,31 +509,12 @@
       flex-shrink: 0;
     }
 
-    .header-icon svg {
-      width: 22px;
-      height: 22px;
-      fill: white;
-    }
+    .header-icon svg { width: 22px; height: 22px; fill: white; }
 
-    .header-text h1 {
-      font-size: 17px;
-      font-weight: 600;
-      color: var(--text-primary);
-      line-height: 1.2;
-    }
+    .header-text h1 { font-size: 17px; font-weight: 600; color: var(--text-primary); line-height: 1.2; }
+    .header-text p { font-size: 13px; color: var(--text-secondary); line-height: 1.3; }
 
-    .header-text p {
-      font-size: 13px;
-      color: var(--text-secondary);
-      line-height: 1.3;
-    }
-
-    .header-right {
-      margin-left: auto;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
+    .header-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 
     .user-badge {
       font-size: 12px;
@@ -354,12 +537,8 @@
       transition: background 0.15s, color 0.15s;
     }
 
-    .logout-btn:hover {
-      background: #f5f0ea;
-      color: var(--text-primary);
-    }
+    .logout-btn:hover { background: #f5f0ea; color: var(--text-primary); }
 
-    /* Chat Area */
     .chat-container {
       flex: 1;
       overflow-y: auto;
@@ -369,25 +548,15 @@
       gap: 16px;
     }
 
-    .message {
-      max-width: 680px;
-      width: 100%;
-      animation: fadeIn 0.2s ease;
-    }
+    .message { max-width: 680px; width: 100%; animation: fadeIn 0.2s ease; }
 
     @keyframes fadeIn {
       from { opacity: 0; transform: translateY(4px); }
       to { opacity: 1; transform: translateY(0); }
     }
 
-    .message.user {
-      align-self: flex-end;
-      margin-left: auto;
-    }
-
-    .message.coach {
-      align-self: flex-start;
-    }
+    .message.user { align-self: flex-end; margin-left: auto; }
+    .message.coach { align-self: flex-start; }
 
     .message-bubble {
       padding: 12px 16px;
@@ -410,23 +579,10 @@
       box-shadow: var(--shadow);
     }
 
-    .message-label {
-      font-size: 12px;
-      color: var(--text-secondary);
-      margin-bottom: 4px;
-      font-weight: 500;
-    }
+    .message-label { font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; font-weight: 500; }
+    .message.user .message-label { text-align: right; }
 
-    .message.user .message-label {
-      text-align: right;
-    }
-
-    /* Typing indicator */
-    .typing-indicator {
-      display: flex;
-      gap: 4px;
-      padding: 0;
-    }
+    .typing-indicator { display: flex; gap: 4px; padding: 0; }
 
     .typing-dot {
       width: 8px;
@@ -445,7 +601,6 @@
       30% { opacity: 1; transform: scale(1.2); }
     }
 
-    /* Input Area */
     .input-area {
       background: var(--bg-chat);
       border-top: 1px solid var(--border);
@@ -483,9 +638,7 @@
       box-shadow: 0 0 0 3px rgba(175, 201, 207, 0.4);
     }
 
-    .input-wrapper textarea::placeholder {
-      color: var(--text-secondary);
-    }
+    .input-wrapper textarea::placeholder { color: var(--text-secondary); }
 
     .send-btn {
       width: 48px;
@@ -504,14 +657,8 @@
 
     .send-btn:hover { background: var(--accent-hover); }
     .send-btn:disabled { background: var(--border); cursor: not-allowed; }
+    .send-btn svg { width: 20px; height: 20px; fill: currentColor; }
 
-    .send-btn svg {
-      width: 20px;
-      height: 20px;
-      fill: currentColor;
-    }
-
-    /* Disclaimer */
     .disclaimer {
       text-align: center;
       padding: 8px 24px 12px;
@@ -520,7 +667,31 @@
       background: var(--bg-chat);
     }
 
+    .welcome-msg {
+      text-align: center;
+      padding: 32px 16px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.7;
+    }
+
+    .welcome-msg strong {
+      display: block;
+      font-size: 18px;
+      color: var(--text-primary);
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
     /* Responsive */
+    @media (max-width: 768px) {
+      .stat-grid { grid-template-columns: 1fr; }
+      .contrast-grid { grid-template-columns: 1fr; }
+      .landing-hero h1 { font-size: 32px; }
+      .landing-hero { padding: 40px 20px 32px; }
+      .landing-section { padding: 32px 20px; }
+    }
+
     @media (max-width: 640px) {
       .chat-container { padding: 16px; }
       .input-area { padding: 12px 16px; }
@@ -530,14 +701,104 @@
       .user-badge { display: none; }
     }
   </style>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
 
-  <!-- ─── AUTH GATE ──────────────────────────────────────────────────── -->
-  <div class="auth-gate" id="authGate">
+  <!-- ========== LANDING PAGE ========== -->
+  <div class="landing-page" id="landingPage">
+    <nav class="landing-nav">
+      <div class="landing-nav-brand">
+        <div class="nav-icon">
+          <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+          </svg>
+        </div>
+        Tether
+      </div>
+      <button class="landing-nav-cta" onclick="showAuthFromLanding()">Get Started</button>
+    </nav>
+
+    <div class="landing-hero">
+      <h1>Your employees are navigating change <em>alone</em>. They don't have to.</h1>
+      <p class="hero-sub">Tether is an AI-powered resilience coach that helps employees and managers navigate organizational change with clarity, confidence, and practical support — before stress becomes turnover.</p>
+      <button class="landing-hero-cta" onclick="showAuthFromLanding()">Try Tether Now</button>
+    </div>
+
+    <div class="landing-section">
+      <div class="landing-section-label">The Problem</div>
+      <h2>Your workforce is already overloaded — and then change hits.</h2>
+      <p class="section-body">Before any reorg, AI rollout, or leadership change lands on their desk, your employees are already drowning in coordination overhead and constant interruption. These aren't opinions — they're measured realities.</p>
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="stat-number">57%</div>
+          <div class="stat-label">of a knowledge worker's time is spent communicating — in meetings, email, and chat — leaving only 43% for actual creative or strategic work.</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number">275</div>
+          <div class="stat-label">interruptions per day during core work hours — one every two minutes. After each, it takes an average of 23 minutes to return to deep focus.</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number">439 hrs</div>
+          <div class="stat-label">lost per employee per year to unnecessary meetings, duplicated work, and regaining focus — that's more than 10 full work weeks.</div>
+        </div>
+      </div>
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="stat-number">60%</div>
+          <div class="stat-label">of a knowledge worker's day is consumed by coordination rather than the skilled, strategic work they were hired to do.</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number">28%</div>
+          <div class="stat-label">of the work week is spent managing email alone — before a single strategic decision gets made.</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number">70%</div>
+          <div class="stat-label">of change initiatives fail. Not because the strategy is wrong — because the people side of change is ignored or underserved.</div>
+        </div>
+      </div>
+      <p class="stat-source">Sources: Microsoft 2025 Work Trend Index, McKinsey, Asana Anatomy of Work, Gloria Mark (UC Irvine), Prosci Best Practices in Change Management. Via <a href="https://apple.news/AUoHuG5oMRpOG7SKg5QKcOQ" target="_blank">Forbes</a>.</p>
+    </div>
+
+    <div class="landing-section">
+      <div class="landing-section-label">Why Tether</div>
+      <h2>Not an EAP. Not a meditation app. Not surveillance.</h2>
+      <p class="section-body">EAPs are reactive — someone has to be struggling before they get referred. Meditation apps are generic — they can't help you navigate a conversation with your new manager after a reorg. And most enterprise AI deployments feel like surveillance, not support. Tether is different.</p>
+      <div class="contrast-grid">
+        <div class="contrast-card">
+          <h3>What exists today</h3>
+          <p>EAPs wait for crisis. Wellness apps offer generic breathing exercises. Enterprise tools ban or restrict AI — signaling control, not trust. Employees are left to navigate reorgs, role changes, and uncertainty on their own, with no practical support for the specific situation they're actually in.</p>
+        </div>
+        <div class="contrast-card highlight">
+          <h3>What Tether does</h3>
+          <p>Meets employees where they are — in the actual situation they're facing — with practical, scenario-specific coaching grounded in change management science and evidence-based psychology. Proactive, private, available 24/7. Your company gets anonymous aggregate insights. Your employees get a coach that actually helps.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="landing-section">
+      <div class="landing-section-label">It works for managers too</div>
+      <h2>Tether helps leaders lead change better.</h2>
+      <p class="section-body">Tether isn't just for individual contributors navigating uncertainty. Managers use it to pressure-test their change communication, identify blind spots, and find better framing before rolling changes out to their teams.</p>
+      <div class="case-study">
+        <div class="case-study-label">Early Access Case Study</div>
+        <blockquote>"I came in thinking my team was resisting the changes I needed them to make. After one session with Tether, I realized the problem wasn't their resistance — it was my framing. I was presenting changes in terms of what the organization needed, not in terms of what would make their work easier. Tether helped me see that in 15 minutes. I've been managing people for 12 years and no one has pointed that out to me before."</blockquote>
+        <p class="case-attribution">— Technology Manager, 30-person team | Early access pilot</p>
+      </div>
+    </div>
+
+    <div class="landing-bottom-cta">
+      <h2>Give your people something that actually helps.</h2>
+      <p>Tether is psychology-informed, change-management grounded, and completely private. Try it yourself.</p>
+      <button class="landing-hero-cta" onclick="showAuthFromLanding()">Get Started</button>
+    </div>
+
+    <div class="landing-footer">
+      Tether Resiliency Coach is a coaching and educational tool. It is not therapy, counseling, crisis support, or a substitute for licensed mental health care.
+    </div>
+  </div>
+
+  <!-- ========== AUTH GATE (hidden by default — landing page shows first) ========== -->
+  <div class="auth-gate hidden" id="authGate">
     <div class="auth-card">
       <div class="auth-logo">
         <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -548,11 +809,10 @@
       <h2>Tether Resiliency Coach</h2>
       <p class="auth-subtitle">Navigate change with clarity and confidence</p>
 
-      <!-- Email form -->
       <div class="auth-email-form" id="authEmailForm">
         <div class="auth-privacy-note">
           <p>
-            <span class="privacy-icon">&#128274;</span>
+            <span style="margin-right:6px;">&#128274;</span>
             <strong>Your conversations are private.</strong>
             Use a personal email so your employer never has access to what you share here. Your company only receives anonymous, aggregate insights — never individual conversations.
           </p>
@@ -580,7 +840,6 @@
         </button>
       </div>
 
-      <!-- Check-email confirmation -->
       <div class="auth-check-email" id="authCheckEmail">
         <div class="check-email-icon">
           <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -601,10 +860,8 @@
     </div>
   </div>
 
-  <!-- ─── APP SHELL (hidden until authenticated) ─────────────────── -->
+  <!-- ========== APP SHELL (hidden until authenticated) ========== -->
   <div class="app-shell" id="appShell">
-
-    <!-- Header -->
     <div class="header">
       <div class="header-icon">
         <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -621,10 +878,13 @@
       </div>
     </div>
 
-    <!-- Chat -->
-    <div class="chat-container" id="chatContainer"></div>
+    <div class="chat-container" id="chatContainer">
+      <div class="welcome-msg">
+        <strong>Hi — I'm Tether, your resilience coach.</strong>
+        I'm here to help you navigate whatever's shifting at work right now. What's on your mind?
+      </div>
+    </div>
 
-    <!-- Input -->
     <div class="input-area">
       <div class="input-wrapper">
         <textarea
@@ -640,22 +900,19 @@
       </div>
     </div>
 
-    <!-- Disclaimer -->
     <div class="disclaimer">
       Tether Resiliency Coach is a coaching tool, not therapy or crisis support. If you're in crisis, contact 988 Suicide &amp; Crisis Lifeline.
     </div>
   </div>
 
-  <!-- ─── Supabase JS Client ────────────────────────────────────────── -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
   <script>
-    // ─── Supabase Configuration ────────────────────────────────────────
+    // ========== Supabase Configuration ==========
     const SUPABASE_URL = 'https://ylufotpafbmhhjffovpf.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlsdWZvdHBhZmJtaGhqZmZvdnBmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0NDI1OTMsImV4cCI6MjA5MTAxODU5M30.biYCZXpP_7k5iBTGTWoZc7gA3cY6IlKTTRUP3ZXLppU';
     const SUPABASE_EDGE_URL = SUPABASE_URL + '/functions/v1/chat';
 
-    // Initialize Supabase client (session auto-persists in localStorage)
     let supabase;
     try {
       supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -668,14 +925,13 @@
       console.error('Failed to initialize Supabase client:', e);
     }
 
-    // ─── Auth State ────────────────────────────────────────────────────
+    // ========== State ==========
     let currentUser = null;
-    let appShown = false; // Guard against double showApp() calls
-
-    // ─── Chat State ────────────────────────────────────────────────────
+    let appShown = false;
     let conversationHistory = [];
     let isStreaming = false;
 
+    // ========== System Prompt ==========
     const SYSTEM_PROMPT = `You are the Tether Resiliency Coach — a proactive, psychology-informed coaching tool that helps employees navigate organizational change with clarity, confidence, and resilience.
 
 ## WHO YOU ARE
@@ -767,7 +1023,7 @@ If a user describes any of the following, acknowledge the importance of what the
 
 Use language like: "What you're describing is really important, and it deserves more support than I can offer. I'd encourage you to reach out to [your EAP / a licensed counselor / HR] — they're equipped to help with this in a way I'm not." And offer the local crisis hotline information.`;
 
-    // ─── Corporate Email Detection ─────────────────────────────────────
+    // ========== Corporate Email Detection ==========
     const PERSONAL_DOMAINS = new Set([
       'gmail.com', 'googlemail.com',
       'yahoo.com', 'yahoo.co.uk', 'yahoo.ca', 'yahoo.com.au',
@@ -789,7 +1045,7 @@ Use language like: "What you're describing is really important, and it deserves 
 
     function isPersonalEmail(email) {
       const domain = email.split('@')[1]?.toLowerCase();
-      if (!domain) return true; // no domain yet, don't warn
+      if (!domain) return true;
       return PERSONAL_DOMAINS.has(domain);
     }
 
@@ -806,14 +1062,23 @@ Use language like: "What you're describing is really important, and it deserves 
       }
     }
 
-    // ─── Auth Flow ─────────────────────────────────────────────────────
+    // ========== Landing Page ==========
+    function showAuthFromLanding() {
+      document.getElementById('landingPage').classList.add('hidden');
+      document.getElementById('authGate').classList.remove('hidden');
+    }
+
+    function showLandingPage() {
+      document.getElementById('landingPage').classList.remove('hidden');
+    }
+
+    // ========== Auth Flow ==========
     async function handleMagicLink() {
       const emailInput = document.getElementById('authEmail');
       const authBtn = document.getElementById('authBtn');
       const authError = document.getElementById('authError');
       const email = emailInput.value.trim().toLowerCase();
 
-      // Validate
       if (!email || !email.includes('@') || !email.includes('.')) {
         authError.textContent = 'Please enter a valid email address.';
         authError.classList.add('visible');
@@ -835,7 +1100,6 @@ Use language like: "What you're describing is really important, and it deserves 
 
         if (error) throw error;
 
-        // Show "check your email" state
         document.getElementById('sentEmailDisplay').textContent = email;
         document.getElementById('authEmailForm').classList.add('hidden');
         document.getElementById('authCheckEmail').classList.add('visible');
@@ -863,60 +1127,58 @@ Use language like: "What you're describing is really important, and it deserves 
     async function handleLogout() {
       await supabase.auth.signOut();
       currentUser = null;
+      appShown = false;
       conversationHistory = [];
-      document.getElementById('chatContainer').innerHTML = '';
+      document.getElementById('chatContainer').innerHTML = '<div class="welcome-msg"><strong>Hi — I\'m Tether, your resilience coach.</strong>I\'m here to help you navigate whatever\'s shifting at work right now. What\'s on your mind?</div>';
       showAuthGate();
     }
 
     function showAuthGate() {
       appShown = false;
-      document.getElementById('authGate').classList.remove('hidden');
+      showLandingPage();
+      document.getElementById('authGate').classList.add('hidden');
       document.getElementById('appShell').classList.remove('visible');
       resetAuthForm();
     }
 
     function showApp(user) {
-      // Guard: prevent calling this twice (race between onAuthStateChange and getSession)
       if (appShown) return;
       appShown = true;
 
       currentUser = user;
+      document.getElementById('landingPage').classList.add('hidden');
       document.getElementById('authGate').classList.add('hidden');
       document.getElementById('appShell').classList.add('visible');
 
-      // Show email badge in header
+      if (window.location.hash && window.location.hash.includes('access_token')) {
+        history.replaceState(null, '', window.location.pathname + window.location.search);
+      }
+      if (new URLSearchParams(window.location.search).has('code')) {
+        history.replaceState(null, '', window.location.pathname);
+      }
+
       const badge = document.getElementById('userBadge');
       if (user.email) {
         badge.textContent = user.email;
       }
 
-      // Show welcome message (only if chat is empty)
-      if (document.getElementById('chatContainer').children.length === 0) {
-        addCoachMessage("Hi — I'm the Tether Resiliency Coach. I'm here to help you navigate whatever's shifting at work right now, whether that's a reorg, a new role, a process change, or just the general feeling of \"everything is different and I'm not sure what to do.\"\n\nWhat's on your mind?");
-      }
-
       document.getElementById('userInput').focus();
     }
 
-    // ─── Initialize: Check Session on Load ─────────────────────────────
+    // ========== Initialize Auth ==========
     async function initAuth() {
-      // Guard: ensure Supabase client initialized
       if (!supabase) {
         console.error('Supabase JS client failed to load or initialize.');
-        document.querySelector('.auth-subtitle').textContent = 'Unable to connect. Please refresh the page.';
         return;
       }
 
-      // Detect if we're returning from a magic link click
       const hasHashTokens = window.location.hash && window.location.hash.includes('access_token');
       const hasCodeParam = new URLSearchParams(window.location.search).has('code');
       const isReturningFromMagicLink = hasHashTokens || hasCodeParam;
 
-      // Listen for auth state changes (handles magic link callback + returning sessions)
       supabase.auth.onAuthStateChange((event, session) => {
         console.log('Auth event:', event);
         if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session?.user) {
-          // Clean up auth tokens from URL now that Supabase has processed them
           if (window.location.hash && window.location.hash.includes('access_token')) {
             history.replaceState(null, '', window.location.pathname + window.location.search);
           }
@@ -929,22 +1191,18 @@ Use language like: "What you're describing is really important, and it deserves 
         }
       });
 
-      // Only check for existing session when NOT in the middle of a magic link redirect
       if (!isReturningFromMagicLink) {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
           showApp(session.user);
         }
-        // If no session, auth gate is already visible by default
       }
 
-      // If returning from magic link but auth doesn't resolve within 5s, show auth gate
-      // (handles edge case where token is expired or invalid)
       if (isReturningFromMagicLink) {
         setTimeout(() => {
           if (!appShown) {
             history.replaceState(null, '', window.location.pathname);
-            showAuthGate();
+            showAuthFromLanding();
             const errorEl = document.getElementById('authError');
             if (errorEl) {
               errorEl.textContent = 'That login link has expired. Please request a new one.';
@@ -955,15 +1213,12 @@ Use language like: "What you're describing is really important, and it deserves 
       }
     }
 
-    // ─── UI Helpers ────────────────────────────────────────────────────
+    // ========== UI Helpers ==========
     function addUserMessage(text) {
       const container = document.getElementById('chatContainer');
       const msg = document.createElement('div');
       msg.className = 'message user';
-      msg.innerHTML = `
-        <div class="message-label">You</div>
-        <div class="message-bubble">${escapeHtml(text)}</div>
-      `;
+      msg.innerHTML = '<div class="message-label">You</div><div class="message-bubble">' + escapeHtml(text) + '</div>';
       container.appendChild(msg);
       scrollToBottom();
     }
@@ -972,10 +1227,7 @@ Use language like: "What you're describing is really important, and it deserves 
       const container = document.getElementById('chatContainer');
       const msg = document.createElement('div');
       msg.className = 'message coach';
-      msg.innerHTML = `
-        <div class="message-label">Tether Coach</div>
-        <div class="message-bubble">${formatText(text)}</div>
-      `;
+      msg.innerHTML = '<div class="message-label">Tether Coach</div><div class="message-bubble">' + formatText(text) + '</div>';
       container.appendChild(msg);
       scrollToBottom();
     }
@@ -985,16 +1237,7 @@ Use language like: "What you're describing is really important, and it deserves 
       const msg = document.createElement('div');
       msg.className = 'message coach';
       msg.id = 'streamingMessage';
-      msg.innerHTML = `
-        <div class="message-label">Tether Coach</div>
-        <div class="message-bubble">
-          <div class="typing-indicator">
-            <div class="typing-dot"></div>
-            <div class="typing-dot"></div>
-            <div class="typing-dot"></div>
-          </div>
-        </div>
-      `;
+      msg.innerHTML = '<div class="message-label">Tether Coach</div><div class="message-bubble"><div class="typing-indicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div></div>';
       container.appendChild(msg);
       scrollToBottom();
       return msg;
@@ -1046,7 +1289,7 @@ Use language like: "What you're describing is really important, and it deserves 
       }
     }
 
-    // ─── Send Message (now includes user_id for persistent memory) ────
+    // ========== Send Message ==========
     async function sendMessage() {
       const input = document.getElementById('userInput');
       const sendBtn = document.getElementById('sendBtn');
@@ -1054,25 +1297,20 @@ Use language like: "What you're describing is really important, and it deserves 
 
       if (!text || isStreaming) return;
 
-      // Update UI
       addUserMessage(text);
       input.value = '';
       input.style.height = 'auto';
       isStreaming = true;
       sendBtn.disabled = true;
 
-      // Add to conversation history
       conversationHistory.push({ role: 'user', content: text });
 
-      // Show typing indicator
       addStreamingMessage();
       let fullResponse = '';
 
       try {
-        // Get fresh session (handles token refresh automatically)
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) {
-          // Session expired — redirect back to auth
           updateStreamingMessage("Your session has expired. Please sign in again.");
           finalizeStreamingMessage();
           setTimeout(() => showAuthGate(), 2000);
@@ -1094,10 +1332,9 @@ Use language like: "What you're describing is really important, and it deserves 
 
         if (!response.ok) {
           const errorText = await response.text();
-          throw new Error(`Error ${response.status}: ${errorText}`);
+          throw new Error('Error ' + response.status + ': ' + errorText);
         }
 
-        // Parse SSE stream
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
@@ -1128,7 +1365,6 @@ Use language like: "What you're describing is really important, and it deserves 
           }
         }
 
-        // Finalize
         if (fullResponse) {
           conversationHistory.push({ role: 'assistant', content: fullResponse });
         }
@@ -1145,7 +1381,7 @@ Use language like: "What you're describing is really important, and it deserves 
       }
     }
 
-    // ─── Boot ──────────────────────────────────────────────────────────
+    // ========== Boot ==========
     window.addEventListener('DOMContentLoaded', initAuth);
   </script>
 </body>
