@@ -5,31 +5,30 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Tether — HR Intelligence Dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #0d0f14;
-    --surface: #141720;
-    --surface2: #1c2030;
-    --border: #252a3a;
-    --teal: #4ecdc4;
-    --teal-dim: rgba(78,205,196,0.12);
-    --amber: #f7b731;
-    --amber-dim: rgba(247,183,49,0.12);
-    --rose: #e84393;
-    --rose-dim: rgba(232,67,147,0.10);
-    --sage: #7dce82;
-    --sage-dim: rgba(125,206,130,0.12);
-    --slate: #7b8db0;
-    --ink: #e8ecf5;
-    --ink-dim: #8a93aa;
-    --mono: 'DM Mono', monospace;
-    --head: 'Syne', sans-serif;
-    --body: 'DM Sans', sans-serif;
+    --bg: #f0ebe2;
+    --surface: #ffffff;
+    --surface2: #fafaf8;
+    --border: #ded3cc;
+    --teal: #afc9cf;
+    --teal-dim: rgba(175,201,207,0.22);
+    --amber: #b88752;
+    --amber-dim: rgba(184,135,82,0.15);
+    --rose: #a15555;
+    --rose-dim: rgba(161,85,85,0.12);
+    --sage: #7a9b7e;
+    --sage-dim: rgba(122,155,126,0.15);
+    --slate: #998193;
+    --ink: #4e4a55;
+    --ink-dim: #8a8590;
+    --mono: 'Manrope', sans-serif;
+    --head: 'Manrope', sans-serif;
+    --body: 'Manrope', sans-serif;
   }
-
   * { box-sizing: border-box; margin: 0; padding: 0; }
-
   html, body {
     background: var(--bg);
     color: var(--ink);
@@ -38,7 +37,6 @@
     font-size: 14px;
     line-height: 1.6;
   }
-
   /* ── AUTH GATE ─────────────────────────────────────────── */
   #authGate {
     position: fixed; inset: 0;
@@ -57,7 +55,8 @@
     font-size: 10px;
     letter-spacing: 0.2em;
     text-transform: uppercase;
-    color: var(--teal);
+    color: var(--ink);
+    font-weight: 600;
     margin-bottom: 16px;
   }
   .gate-card h2 {
@@ -74,7 +73,7 @@
   .gate-input {
     width: 100%;
     padding: 12px 14px;
-    background: var(--bg);
+    background: var(--surface2);
     border: 1px solid var(--border);
     color: var(--ink);
     font-family: var(--body);
@@ -83,12 +82,12 @@
     outline: none;
     transition: border-color 0.2s;
   }
-  .gate-input:focus { border-color: var(--teal); }
+  .gate-input:focus { border-color: var(--ink); }
   .gate-btn {
     width: 100%;
     padding: 13px;
-    background: var(--teal);
-    color: var(--bg);
+    background: var(--ink);
+    color: #ffffff;
     border: none;
     font-family: var(--head);
     font-size: 13px;
@@ -96,9 +95,9 @@
     letter-spacing: 0.08em;
     text-transform: uppercase;
     cursor: pointer;
-    transition: opacity 0.2s;
+    transition: background 0.2s;
   }
-  .gate-btn:hover { opacity: 0.88; }
+  .gate-btn:hover { background: #5e5a65; }
   .gate-btn:disabled { opacity: 0.4; cursor: not-allowed; }
   .gate-error {
     color: var(--rose);
@@ -107,7 +106,6 @@
     font-family: var(--mono);
     min-height: 18px;
   }
-
   /* ── ACCESS DENIED ─────────────────────────────────────── */
   #accessDenied {
     display: none;
@@ -123,10 +121,8 @@
   .denied-card .icon { font-size: 48px; margin-bottom: 20px; }
   .denied-card h2 { font-family: var(--head); font-size: 20px; margin-bottom: 10px; }
   .denied-card p { color: var(--ink-dim); font-size: 13px; }
-
   /* ── MAIN LAYOUT ───────────────────────────────────────── */
   #dashboard { display: none; }
-
   .top-bar {
     display: flex; align-items: center; justify-content: space-between;
     padding: 20px 32px;
@@ -139,8 +135,9 @@
     font-size: 16px;
     font-weight: 800;
     letter-spacing: 0.05em;
+    color: var(--ink);
   }
-  .brand span { color: var(--teal); }
+  .brand span { color: var(--slate); }
   .top-right {
     display: flex; align-items: center; gap: 20px;
   }
@@ -153,11 +150,13 @@
     background: var(--bg);
     border: 1px solid var(--border);
     padding: 5px 12px;
+    font-weight: 600;
   }
   .last-updated {
     font-family: var(--mono);
     font-size: 10px;
     color: var(--ink-dim);
+    font-variant-numeric: tabular-nums;
   }
   .signout-btn {
     background: none; border: none;
@@ -165,16 +164,15 @@
     font-size: 10px; letter-spacing: 0.1em;
     text-transform: uppercase; cursor: pointer;
     padding: 5px 0;
+    font-weight: 600;
     transition: color 0.2s;
   }
   .signout-btn:hover { color: var(--rose); }
-
   .main {
     max-width: 1280px;
     margin: 0 auto;
     padding: 36px 32px 80px;
   }
-
   .page-header {
     margin-bottom: 40px;
   }
@@ -183,7 +181,8 @@
     font-size: 10px;
     letter-spacing: 0.2em;
     text-transform: uppercase;
-    color: var(--teal);
+    color: var(--slate);
+    font-weight: 600;
     margin-bottom: 10px;
   }
   .page-title {
@@ -192,27 +191,26 @@
     font-weight: 800;
     letter-spacing: -0.01em;
     margin-bottom: 8px;
+    color: var(--ink);
   }
   .page-subtitle {
     color: var(--ink-dim);
     font-size: 14px;
     max-width: 560px;
   }
-
   /* ── PRIVACY NOTICE ────────────────────────────────────── */
   .privacy-bar {
     background: var(--teal-dim);
-    border: 1px solid rgba(78,205,196,0.25);
+    border: 1px solid rgba(175,201,207,0.45);
     border-left: 3px solid var(--teal);
     padding: 12px 18px;
     font-size: 12px;
-    color: var(--teal);
+    color: var(--ink);
     font-family: var(--mono);
     letter-spacing: 0.02em;
     margin-bottom: 36px;
     display: flex; align-items: center; gap: 10px;
   }
-
   /* ── STAT CARDS ────────────────────────────────────────── */
   .stats-grid {
     display: grid;
@@ -231,6 +229,7 @@
     letter-spacing: 0.2em;
     text-transform: uppercase;
     color: var(--ink-dim);
+    font-weight: 600;
     margin-bottom: 10px;
   }
   .stat-value {
@@ -239,16 +238,17 @@
     font-weight: 800;
     line-height: 1;
     margin-bottom: 6px;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
   }
   .stat-meta {
     font-size: 11px;
     color: var(--ink-dim);
   }
-  .stat-card.teal .stat-value { color: var(--teal); }
+  .stat-card.teal .stat-value { color: var(--ink); }
   .stat-card.amber .stat-value { color: var(--amber); }
   .stat-card.sage .stat-value { color: var(--sage); }
   .stat-card.slate .stat-value { color: var(--slate); }
-
   /* ── TWO-COL LAYOUT ────────────────────────────────────── */
   .two-col {
     display: grid;
@@ -257,7 +257,6 @@
     margin-bottom: 20px;
   }
   .full-col { margin-bottom: 20px; }
-
   /* ── PANEL ─────────────────────────────────────────────── */
   .panel {
     background: var(--surface);
@@ -274,6 +273,7 @@
     font-weight: 700;
     letter-spacing: 0.04em;
     text-transform: uppercase;
+    color: var(--ink);
   }
   .panel-tag {
     font-family: var(--mono);
@@ -284,9 +284,9 @@
     background: var(--bg);
     border: 1px solid var(--border);
     padding: 3px 8px;
+    font-weight: 600;
   }
   .panel-body { padding: 24px; }
-
   /* ── ADKAR BARS ────────────────────────────────────────── */
   .adkar-row {
     display: grid;
@@ -301,6 +301,8 @@
     font-size: 11px;
     letter-spacing: 0.08em;
     text-transform: uppercase;
+    font-weight: 600;
+    color: var(--ink);
   }
   .adkar-bar-wrap {
     height: 6px;
@@ -317,8 +319,9 @@
   .adkar-score {
     font-family: var(--mono);
     font-size: 13px;
-    font-weight: 500;
+    font-weight: 600;
     text-align: right;
+    font-variant-numeric: tabular-nums;
   }
   .adkar-status {
     font-family: var(--mono);
@@ -327,12 +330,12 @@
     text-transform: uppercase;
     padding: 3px 8px;
     text-align: center;
+    font-weight: 600;
   }
-  .status-solid { background: var(--sage-dim); color: var(--sage); border: 1px solid rgba(125,206,130,0.25); }
-  .status-warn { background: var(--amber-dim); color: var(--amber); border: 1px solid rgba(247,183,49,0.25); }
-  .status-critical { background: var(--rose-dim); color: var(--rose); border: 1px solid rgba(232,67,147,0.25); }
-  .status-developing { background: var(--teal-dim); color: var(--teal); border: 1px solid rgba(78,205,196,0.25); }
-
+  .status-solid { background: var(--sage-dim); color: var(--sage); border: 1px solid rgba(122,155,126,0.35); }
+  .status-warn { background: var(--amber-dim); color: var(--amber); border: 1px solid rgba(184,135,82,0.35); }
+  .status-critical { background: var(--rose-dim); color: var(--rose); border: 1px solid rgba(161,85,85,0.35); }
+  .status-developing { background: var(--teal-dim); color: var(--ink); border: 1px solid rgba(175,201,207,0.45); }
   /* ── EMOTION THEMES ────────────────────────────────────── */
   .theme-grid {
     display: grid;
@@ -356,7 +359,6 @@
   .theme-card.hopeful::before { background: var(--sage); }
   .theme-card.exhausted::before { background: var(--slate); }
   .theme-card.disconnected::before { background: var(--teal); }
-
   .theme-header {
     display: flex; align-items: center; justify-content: space-between;
     margin-bottom: 12px;
@@ -372,19 +374,18 @@
   .theme-card.resistance .theme-name { color: var(--rose); }
   .theme-card.hopeful .theme-name { color: var(--sage); }
   .theme-card.exhausted .theme-name { color: var(--slate); }
-  .theme-card.disconnected .theme-name { color: var(--teal); }
-
+  .theme-card.disconnected .theme-name { color: var(--ink); }
   .theme-pct {
     font-family: var(--mono);
     font-size: 18px;
-    font-weight: 500;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
   }
   .theme-card.anxiety .theme-pct { color: var(--amber); }
   .theme-card.resistance .theme-pct { color: var(--rose); }
   .theme-card.hopeful .theme-pct { color: var(--sage); }
   .theme-card.exhausted .theme-pct { color: var(--slate); }
-  .theme-card.disconnected .theme-pct { color: var(--teal); }
-
+  .theme-card.disconnected .theme-pct { color: var(--ink); }
   .theme-phrases {
     display: flex;
     flex-wrap: wrap;
@@ -395,10 +396,11 @@
     font-size: 10px;
     letter-spacing: 0.04em;
     padding: 4px 9px;
-    background: var(--surface2);
+    background: var(--surface);
     border: 1px solid var(--border);
     color: var(--ink-dim);
     line-height: 1.4;
+    font-weight: 500;
   }
   .privacy-floor-msg {
     font-family: var(--mono);
@@ -407,7 +409,6 @@
     font-style: italic;
     padding: 8px 0;
   }
-
   /* ── BOTTLENECK TABLE ──────────────────────────────────── */
   .bottleneck-row {
     display: flex;
@@ -423,6 +424,7 @@
     color: var(--ink-dim);
     width: 20px;
     flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
   }
   .bn-stage {
     font-family: var(--mono);
@@ -430,6 +432,8 @@
     text-transform: uppercase;
     letter-spacing: 0.08em;
     flex: 1;
+    font-weight: 600;
+    color: var(--ink);
   }
   .bn-bar-wrap {
     flex: 2;
@@ -449,8 +453,8 @@
     color: var(--ink-dim);
     width: 36px;
     text-align: right;
+    font-variant-numeric: tabular-nums;
   }
-
   /* ── TREND SPARKLINE ───────────────────────────────────── */
   .trend-wrap {
     display: flex;
@@ -469,12 +473,13 @@
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: var(--ink-dim);
+    font-weight: 600;
   }
   .sparkline { display: flex; align-items: flex-end; gap: 3px; height: 32px; }
   .spark-bar {
     flex: 1;
-    background: var(--teal);
-    opacity: 0.5;
+    background: var(--ink);
+    opacity: 0.55;
     min-width: 4px;
     border-radius: 1px 1px 0 0;
     transition: opacity 0.2s;
@@ -484,7 +489,7 @@
   .spark-bar.amber { background: var(--amber); }
   .spark-bar.sage { background: var(--sage); }
   .spark-bar.slate { background: var(--slate); }
-
+  .spark-bar.teal { background: var(--teal); opacity: 0.85; }
   /* ── LOADING STATE ─────────────────────────────────────── */
   .loading-shimmer {
     background: linear-gradient(90deg, var(--surface) 25%, var(--surface2) 50%, var(--surface) 75%);
@@ -496,11 +501,10 @@
     0% { background-position: 200% 0; }
     100% { background-position: -200% 0; }
   }
-
   /* ── PRIVACY FLOOR BANNER ──────────────────────────────── */
   .privacy-floor-banner {
     background: var(--amber-dim);
-    border: 1px solid rgba(247,183,49,0.2);
+    border: 1px solid rgba(184,135,82,0.3);
     border-left: 3px solid var(--amber);
     padding: 10px 16px;
     font-size: 11px;
@@ -509,8 +513,8 @@
     letter-spacing: 0.02em;
     margin-bottom: 16px;
     display: none;
+    font-weight: 500;
   }
-
   /* ── RESPONSIVE ────────────────────────────────────────── */
   @media (max-width: 900px) {
     .stats-grid { grid-template-columns: repeat(2, 1fr); }
@@ -521,7 +525,6 @@
 </style>
 </head>
 <body>
-
 <!-- ── AUTH GATE ──────────────────────────────────────────────────── -->
 <div id="authGate">
   <div class="gate-card">
@@ -534,7 +537,6 @@
     <div class="gate-error" id="gateError"></div>
   </div>
 </div>
-
 <!-- ── ACCESS DENIED ──────────────────────────────────────────────── -->
 <div id="accessDenied">
   <div class="denied-card">
@@ -545,10 +547,8 @@
     <button class="gate-btn" style="width:auto;padding:10px 24px;" onclick="signOut()">Sign Out</button>
   </div>
 </div>
-
 <!-- ── MAIN DASHBOARD ──────────────────────────────────────────────── -->
 <div id="dashboard">
-
   <div class="top-bar">
     <div class="brand">TETHER<span>.</span></div>
     <div class="top-right">
@@ -557,19 +557,15 @@
       <button class="signout-btn" onclick="signOut()">Sign Out →</button>
     </div>
   </div>
-
   <div class="main">
-
     <div class="page-header">
       <div class="page-eyebrow">HR Intelligence Dashboard</div>
       <div class="page-title">Workforce Readiness Overview</div>
       <div class="page-subtitle">Aggregate, anonymized insights from employee coaching sessions. No individual data is accessible or displayed.</div>
     </div>
-
     <div class="privacy-bar">
       ⬡ &nbsp;All data shown is anonymized and aggregated. Individual sessions, identities, and conversation content are never accessible to HR.
     </div>
-
     <!-- Stats Row -->
     <div class="stats-grid">
       <div class="stat-card teal">
@@ -593,10 +589,8 @@
         <div class="stat-meta">active context</div>
       </div>
     </div>
-
     <!-- ADKAR + Bottleneck -->
     <div class="two-col">
-
       <div class="panel">
         <div class="panel-header">
           <div class="panel-title">ADKAR Snapshot</div>
@@ -606,7 +600,6 @@
           <div style="color:var(--ink-dim);font-family:var(--mono);font-size:11px;">Loading...</div>
         </div>
       </div>
-
       <div class="panel">
         <div class="panel-header">
           <div class="panel-title">Stage Bottlenecks</div>
@@ -616,9 +609,7 @@
           <div style="color:var(--ink-dim);font-family:var(--mono);font-size:11px;">Loading...</div>
         </div>
       </div>
-
     </div>
-
     <!-- Emotional Tone Themes -->
     <div class="full-col">
       <div class="panel">
@@ -636,7 +627,6 @@
         </div>
       </div>
     </div>
-
     <!-- Trend Sparklines -->
     <div class="two-col">
       <div class="panel">
@@ -650,7 +640,6 @@
           </div>
         </div>
       </div>
-
       <div class="panel">
         <div class="panel-header">
           <div class="panel-title">Session Engagement</div>
@@ -663,36 +652,29 @@
         </div>
       </div>
     </div>
-
   </div>
 </div>
-
 <script>
   // ── CONFIG ──────────────────────────────────────────────────────────────
   const SUPABASE_URL = 'https://ylufotpafbmhhjffovpf.supabase.co';
-  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlsdWZvdHBhZmJtaGhqZmZvdnBmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0NDI1OTMsImV4cCI6MjA5MTAxODU5M30.biYCZXpP_7k5iBTGTWoZc7gA3cY6IlKTTRUP3ZXLppU'; // replace with actual key
+  const SUPABASE_ANON_KEY = 'YOUR_TETHER_ANON_KEY'; // ⚠ REPLACE with your real anon key before committing
   const WORKER_URL = 'https://tether-proxy.john-834.workers.dev';
   const PRIVACY_FLOOR = 5; // minimum employees before showing phrase themes
-
   let currentUser = null;
   let userProfile = null;
-
   // ── AUTH ─────────────────────────────────────────────────────────────────
   async function signIn() {
     const email = document.getElementById('gateEmail').value.trim();
     const password = document.getElementById('gatePassword').value;
     const btn = document.getElementById('gateBtn');
     const err = document.getElementById('gateError');
-
     if (!email || !password) {
       err.textContent = 'Email and password required.';
       return;
     }
-
     btn.disabled = true;
     btn.textContent = 'Signing in...';
     err.textContent = '';
-
     try {
       const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
         method: 'POST',
@@ -704,18 +686,15 @@
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error_description || data.msg || 'Sign in failed.');
-
       currentUser = data;
       localStorage.setItem('tether_hr_session', JSON.stringify(data));
       await loadDashboard();
-
     } catch (e) {
       err.textContent = e.message;
       btn.disabled = false;
       btn.textContent = 'Sign In';
     }
   }
-
   async function checkExistingSession() {
     const saved = localStorage.getItem('tether_hr_session');
     if (!saved) return;
@@ -726,7 +705,6 @@
       localStorage.removeItem('tether_hr_session');
     }
   }
-
   function signOut() {
     localStorage.removeItem('tether_hr_session');
     currentUser = null;
@@ -739,7 +717,6 @@
     document.getElementById('gateBtn').textContent = 'Sign In';
     document.getElementById('gateError').textContent = '';
   }
-
   // ── LOAD DASHBOARD ────────────────────────────────────────────────────────
   async function loadDashboard() {
     // Check admin status
@@ -753,13 +730,11 @@
       document.getElementById('accessDenied').style.display = 'flex';
       return;
     }
-
     userProfile = profiles[0];
     document.getElementById('authGate').style.display = 'none';
     document.getElementById('dashboard').style.display = 'block';
     document.getElementById('companyBadge').textContent =
       userProfile.companies?.name || 'Your Company';
-
     await Promise.all([
       loadStats(),
       loadAdkar(),
@@ -769,7 +744,6 @@
       loadEngagement()
     ]);
   }
-
   function authHeaders() {
     return {
       'apikey': SUPABASE_ANON_KEY,
@@ -777,14 +751,12 @@
       'Content-Type': 'application/json'
     };
   }
-
   // ── STATS ─────────────────────────────────────────────────────────────────
   async function loadStats() {
     try {
       // Active employees this month
       const monthStart = new Date();
       monthStart.setDate(1); monthStart.setHours(0,0,0,0);
-
       const sessRes = await fetch(
         `${SUPABASE_URL}/rest/v1/sessions?company_id=eq.${userProfile.company_id}&created_at=gte.${monthStart.toISOString()}&select=user_id`,
         { headers: authHeaders() }
@@ -792,7 +764,6 @@
       const sessions = await sessRes.json();
       const uniqueUsers = new Set(sessions.map(s => s.user_id)).size;
       document.getElementById('statActive').textContent = uniqueUsers;
-
       // Sessions this week
       const weekStart = new Date();
       weekStart.setDate(weekStart.getDate() - 7);
@@ -802,7 +773,6 @@
       );
       const weekSessions = await weekSessRes.json();
       document.getElementById('statSessions').textContent = weekSessions.length;
-
       // Latest ADKAR average
       const adkarRes = await fetch(
         `${SUPABASE_URL}/rest/v1/adkar_assessments?company_id=eq.${userProfile.company_id}&order=assessed_at.desc&limit=100&select=total_score`,
@@ -813,7 +783,6 @@
         const avg = adkars.reduce((s, a) => s + (a.total_score || 0), 0) / adkars.length;
         document.getElementById('statAdkar').textContent = (avg / 5).toFixed(1);
       }
-
       // Change context
       const ctxRes = await fetch(
         `${SUPABASE_URL}/rest/v1/companies?id=eq.${userProfile.company_id}&select=change_context`,
@@ -822,16 +791,13 @@
       const ctxData = await ctxRes.json();
       document.getElementById('statChange').textContent =
         ctxData[0]?.change_context || 'General';
-
       // Last updated
       document.getElementById('lastUpdated').textContent =
         'Updated: ' + new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-
     } catch (e) {
       console.error('Stats error:', e);
     }
   }
-
   // ── ADKAR PANEL ───────────────────────────────────────────────────────────
   async function loadAdkar() {
     try {
@@ -841,7 +807,6 @@
       );
       const rows = await res.json();
       if (!rows.length) { document.getElementById('adkarPanel').innerHTML = noDataMsg(); return; }
-
       const avg = (field) => rows.reduce((s, r) => s + (r[field] || 0), 0) / rows.length;
       const stages = [
         { key: 'awareness_score',     label: 'Awareness' },
@@ -850,15 +815,13 @@
         { key: 'ability_score',       label: 'Ability' },
         { key: 'reinforcement_score', label: 'Reinforcement' }
       ];
-
-      const colors = { solid: '#7dce82', developing: '#4ecdc4', warn: '#f7b731', critical: '#e84393' };
+      const colors = { solid: '#7a9b7e', developing: '#4e4a55', warn: '#b88752', critical: '#a15555' };
       const statusFor = (score) => {
         if (score >= 3.5) return { label: 'Solid',      cls: 'status-solid',      color: colors.solid };
         if (score >= 2.8) return { label: 'Developing', cls: 'status-developing', color: colors.developing };
         if (score >= 2.0) return { label: 'Bottleneck', cls: 'status-warn',       color: colors.warn };
         return              { label: 'Critical',    cls: 'status-critical',    color: colors.critical };
       };
-
       let html = '';
       stages.forEach(s => {
         const score = avg(s.key);
@@ -875,15 +838,12 @@
             <div class="adkar-status ${st.cls}">${st.label}</div>
           </div>`;
       });
-
       document.getElementById('adkarPanel').innerHTML = html;
       setTimeout(animateBars, 100);
-
     } catch (e) {
       document.getElementById('adkarPanel').innerHTML = noDataMsg();
     }
   }
-
   // ── BOTTLENECK PANEL ──────────────────────────────────────────────────────
   async function loadBottlenecks() {
     try {
@@ -893,15 +853,13 @@
       );
       const rows = await res.json();
       if (!rows.length) { document.getElementById('bottleneckPanel').innerHTML = noDataMsg(); return; }
-
       const stages = ['awareness_score','desire_score','knowledge_score','ability_score','reinforcement_score'];
       const labels = ['Awareness','Desire','Knowledge','Ability','Reinforcement'];
       const stuckPct = stages.map((s, i) => ({
         label: labels[i],
         pct: Math.round((rows.filter(r => (r[s] || 0) < 2.5).length / rows.length) * 100)
       })).sort((a, b) => b.pct - a.pct);
-
-      const colors = ['#e84393','#f7b731','#f7b731','#4ecdc4','#7dce82'];
+      const colors = ['#a15555','#b88752','#b88752','#afc9cf','#7a9b7e'];
       let html = '';
       stuckPct.forEach((s, i) => {
         html += `
@@ -915,15 +873,12 @@
             <div class="bn-pct">${s.pct}%</div>
           </div>`;
       });
-
       document.getElementById('bottleneckPanel').innerHTML = html;
       setTimeout(animateBars, 150);
-
     } catch (e) {
       document.getElementById('bottleneckPanel').innerHTML = noDataMsg();
     }
   }
-
   // ── EMOTIONAL THEMES ──────────────────────────────────────────────────────
   async function loadThemes() {
     try {
@@ -932,16 +887,13 @@
         { headers: authHeaders() }
       );
       const rows = await res.json();
-
       if (!rows.length) {
         document.getElementById('themeGrid').innerHTML =
           `<div style="grid-column:span 2" class="privacy-floor-msg">No theme analysis available yet. The nightly analysis runs after sufficient sessions have accumulated.</div>`;
         return;
       }
-
       const data = rows[0];
       const employeeCount = data.employee_count || 0;
-
       if (employeeCount < PRIVACY_FLOOR) {
         document.getElementById('privacyFloorBanner').style.display = 'block';
         document.getElementById('floorCount').textContent = PRIVACY_FLOOR;
@@ -949,7 +901,6 @@
           `<div style="grid-column:span 2" class="privacy-floor-msg">Phrase themes will appear once ${PRIVACY_FLOOR} or more employees have active sessions.</div>`;
         return;
       }
-
       const themeConfig = [
         { key: 'anxiety',      label: 'Anxiety / Uncertainty',    cls: 'anxiety' },
         { key: 'resistance',   label: 'Resistance / Frustration', cls: 'resistance' },
@@ -957,19 +908,15 @@
         { key: 'exhausted',    label: 'Exhausted / Overwhelmed',  cls: 'exhausted' },
         { key: 'disconnected', label: 'Disconnected',             cls: 'disconnected' }
       ];
-
       let html = '';
       themeConfig.forEach(t => {
         const themeData = data.themes?.[t.key];
         if (!themeData) return;
-
         const phrases = (themeData.phrases || []).slice(0, 8);
         const pct = themeData.percentage || 0;
-
         const chipsHtml = phrases.length >= 3
           ? phrases.map(p => `<span class="phrase-chip">${p}</span>`).join('')
           : `<span class="privacy-floor-msg">Insufficient responses in this theme to display phrases.</span>`;
-
         html += `
           <div class="theme-card ${t.cls}">
             <div class="theme-header">
@@ -979,27 +926,22 @@
             <div class="theme-phrases">${chipsHtml}</div>
           </div>`;
       });
-
       document.getElementById('themeGrid').innerHTML = html || noDataMsg();
-
     } catch (e) {
       document.getElementById('themeGrid').innerHTML = noDataMsg();
     }
   }
-
   // ── TRENDS ────────────────────────────────────────────────────────────────
   async function loadTrends() {
     try {
       const eightWeeksAgo = new Date();
       eightWeeksAgo.setDate(eightWeeksAgo.getDate() - 56);
-
       const res = await fetch(
         `${SUPABASE_URL}/rest/v1/adkar_assessments?company_id=eq.${userProfile.company_id}&assessed_at=gte.${eightWeeksAgo.toISOString()}&order=assessed_at.asc&select=assessed_at,total_score`,
         { headers: authHeaders() }
       );
       const rows = await res.json();
       if (!rows.length) { document.getElementById('trendPanel').innerHTML = noDataMsg(); return; }
-
       // Bucket into 8 weekly bins
       const bins = Array(8).fill(null).map(() => []);
       rows.forEach(r => {
@@ -1007,14 +949,11 @@
         const bin = Math.min(7, weeksAgo);
         bins[7 - bin].push(r.total_score || 0);
       });
-
       const weeklyAvgs = bins.map(b => b.length ? b.reduce((s, v) => s + v, 0) / b.length : 0);
       const max = Math.max(...weeklyAvgs, 0.1);
-
       const stages = [
         { label: 'Overall ADKAR', color: 'teal', values: weeklyAvgs }
       ];
-
       let html = '';
       stages.forEach(s => {
         const bars = s.values.map(v => {
@@ -1023,61 +962,50 @@
         }).join('');
         html += `<div class="trend-row"><div class="trend-label">${s.label}</div><div class="sparkline">${bars}</div></div>`;
       });
-
       document.getElementById('trendPanel').innerHTML = html;
-
     } catch (e) {
       document.getElementById('trendPanel').innerHTML = noDataMsg();
     }
   }
-
   // ── ENGAGEMENT ────────────────────────────────────────────────────────────
   async function loadEngagement() {
     try {
       const eightWeeksAgo = new Date();
       eightWeeksAgo.setDate(eightWeeksAgo.getDate() - 56);
-
       const res = await fetch(
         `${SUPABASE_URL}/rest/v1/sessions?company_id=eq.${userProfile.company_id}&created_at=gte.${eightWeeksAgo.toISOString()}&select=created_at`,
         { headers: authHeaders() }
       );
       const rows = await res.json();
-
       const bins = Array(8).fill(0);
       rows.forEach(r => {
         const weeksAgo = Math.floor((Date.now() - new Date(r.created_at).getTime()) / (7 * 86400000));
         const bin = Math.min(7, weeksAgo);
         bins[7 - bin]++;
       });
-
       const max = Math.max(...bins, 1);
       const bars = bins.map(v => {
         const h = Math.round((v / max) * 100);
         return `<div class="spark-bar sage" style="height:${Math.max(h, 4)}%"></div>`;
       }).join('');
-
       document.getElementById('engagementPanel').innerHTML = `
         <div class="trend-row">
           <div class="trend-label">Sessions / Week</div>
           <div class="sparkline">${bars}</div>
         </div>`;
-
     } catch (e) {
       document.getElementById('engagementPanel').innerHTML = noDataMsg();
     }
   }
-
   // ── UTILITIES ─────────────────────────────────────────────────────────────
   function animateBars() {
     document.querySelectorAll('[data-width]').forEach(el => {
       el.style.width = el.getAttribute('data-width') + '%';
     });
   }
-
   function noDataMsg() {
     return '<div style="color:var(--ink-dim);font-family:var(--mono);font-size:11px;padding:8px 0;">No data available yet.</div>';
   }
-
   // Enter key on password
   document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('gatePassword')?.addEventListener('keydown', e => {
