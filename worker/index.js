@@ -215,7 +215,22 @@ async function handleGetMemory(request, env, corsHeader, auth) {
   );
   const adkar = await adkarRes.json();
 
-  const memoryContext = buildMemoryContext(summaries, profile[0], adkar[0]);
+  // Preferred name lives on user_profiles (populated by the on_auth_user_created
+  // trigger from raw_user_meta_data at signup, and by enterApp() belt-and-suspenders
+  // upsert). NULL for users who signed up before Phase B or never entered a name.
+  const profileNameRes = await fetch(
+    `${env.SUPABASE_URL}/rest/v1/user_profiles?id=eq.${userId}&select=preferred_name`,
+    {
+      headers: {
+        'apikey': env.SUPABASE_SERVICE_KEY,
+        'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`
+      }
+    }
+  );
+  const profileNameRows = await profileNameRes.json();
+  const preferredName = profileNameRows[0]?.preferred_name || null;
+
+  const memoryContext = buildMemoryContext(summaries, profile[0], adkar[0], preferredName);
   return new Response(
     JSON.stringify({ memoryContext }),
     { headers: corsHeader }
@@ -338,10 +353,24 @@ async function handleAdkar(request, env, corsHeader, auth) {
   );
 }
 
-// ─── Memory context (unchanged) ─────────────────────────────────────────────
-function buildMemoryContext(summaries, profile, adkar) {
-  if (!summaries?.length && !profile && !adkar) return '';
-  let context = 'COACHING HISTORY FOR THIS EMPLOYEE:\n\n';
+// ─── Memory context ─────────────────────────────────────────────────────────
+// Builds the context block prepended to the system prompt. Includes the
+// employee's preferred name (when known) and any prior-session coaching
+// history. Either is enough to produce a non-empty context — a first-time
+// user with a known name still gets a personalized greeting.
+function buildMemoryContext(summaries, profile, adkar, preferredName) {
+  const hasHistory = !!(summaries?.length || profile || adkar);
+  if (!hasHistory && !preferredName) return '';
+
+  let context = '';
+
+  if (preferredName) {
+    context += `EMPLOYEE PREFERRED NAME: ${preferredName}\n\n`;
+  }
+
+  if (hasHistory) {
+    context += 'COACHING HISTORY FOR THIS EMPLOYEE:\n\n';
+  }
 
   if (summaries?.length) {
     context += 'Recent sessions:\n';
@@ -368,7 +397,10 @@ function buildMemoryContext(summaries, profile, adkar) {
     context += `Longitudinal coaching notes:\n${profile.coaching_notes}\n\n`;
   }
 
-  context += `Use this history to provide continuity. Reference prior sessions naturally when relevant. Do not recite this history back verbatim.`;
+  if (hasHistory) {
+    context += `Use this history to provide continuity. Reference prior sessions naturally when relevant. Do not recite this history back verbatim.`;
+  }
+
   return context;
 }
 
@@ -440,6 +472,7 @@ GREETING RULES
 - Only say "Welcome back" when the user is returning (i.e., they have prior session history or memory context)
 - For first-time users, use a fresh introduction like: "Hi — I'm Tether, your resilience coach. I'm here to help you navigate whatever's shifting at work right now. What's on your mind?"
 - Do not assume a user has been here before unless session memory confirms it
+- If an EMPLOYEE PREFERRED NAME appears in the context below, address the user by that name in your opening line (e.g., "Hi John — I'm Tether..." for new users, or "Welcome back, John." for returning users). Use only the name provided — never invent or guess one. If no name is provided, do not use a name.
 
 ${memoryContext ? `\n${memoryContext}` : ''}`;
 }
