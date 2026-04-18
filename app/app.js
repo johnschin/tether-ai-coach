@@ -12,10 +12,15 @@ window.addEventListener('DOMContentLoaded', async () => {
     navigator.serviceWorker.register('/sw.js').catch(console.error);
   }
 
-  // Clean up auth hash from URL (magic link leaves tokens in fragment)
-  if (window.location.hash && window.location.hash.includes('access_token')) {
-    history.replaceState(null, '', window.location.pathname + window.location.search);
-  }
+  // NOTE: Do NOT manually clean up the #access_token hash here.
+  // supabase-js v2 (detectSessionInUrl: true, which is the default) parses the
+  // hash asynchronously on client init and cleans up the URL itself once the
+  // session is captured. A manual history.replaceState in DOMContentLoaded
+  // races with that async parse and, on slower devices like mobile, wipes the
+  // tokens before supabase-js can read them — breaking cross-device magic-link
+  // sign-in. Verified 2026-04-18: removing the manual cleanup fixes phone
+  // clicks after laptop-initiated signup. (Diagnosed from auth logs showing
+  // server-side verify succeeded but client-side session never established.)
 
   const session = await getSession();
   if (session?.user) {
