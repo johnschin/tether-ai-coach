@@ -1,45 +1,150 @@
-// =============================================
-// TETHER AI COACH — CLOUDFLARE WORKER
-// Evolved Caveman AI, LLC
-// =============================================
+// ─── Tether AI Coach — Cloudflare Worker (HARDENED v2, ES256) ───────────────
+// Destination in repo: tether-ai-coach/worker/index.js
+//
+// Changes from prior version (JWT hardening, Phase 1):
+//   1. Every application endpoint now requires a valid Supabase session JWT
+//      in the Authorization header (`Bearer <access_token>`).
+//   2. userId is sourced from the JWT's `sub` claim — NEVER from the request
+//      body. Any body-supplied userId is IGNORED. This closes the gap where
+//      anyone with a UUID could read/write another user's data.
+//   3. 401 on missing/malformed/expired/invalid-signature tokens.
+//
+// Note on signing algorithm:
+//   This Supabase project uses ASYMMETRIC signing (ES256 / ECDSA P-256),
+//   verified via the project's JWKS endpoint at:
+//     {SUPABASE_URL}/auth/v1/.well-known/jwks.json
+//   There is NO shared JWT secret for this project — the worker fetches
+//   the public keys at runtime and caches them in memory. jose's
+//   createRemoteJWKSet handles the fetch + cache + on-demand refresh.
+//
+// Required env vars (unchanged from prior deploy):
+//   - TETHER_ALLOWED_ORIGIN
+//   - ANTHROPIC_API_KEY
+//   - SUPABASE_URL          ← also used to construct the JWKS URL
+//   - SUPABASE_SERVICE_KEY
+//   (No new secrets needed — JWKS is a public endpoint.)
+//
+// New npm dependency:
+//   - jose  (standard JOSE library for Workers)
+//     Install with: `cd worker && npm install jose`
+
+import { createRemoteJWKSet, jwtVerify } from 'jose';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS'
 };
 
+// ─── JWKS cache ─────────────────────────────────────────────────────────────
+// Module-level cache. createRemoteJWKSet returns a resolver function that
+// internally caches fetched JWKs and refreshes them on demand (default 30min
+// cache, automatic refresh if a new kid is seen). We only need to build this
+// once per worker isolate — subsequent requests reuse the same resolver.
+let _jwks = null;
+function getJWKS(supabaseUrl) {
+  if (!_jwks) {
+    _jwks = createRemoteJWKSet(
+      new URL(`${supabaseUrl}/auth/v1/.well-known/jwks.json`)
+    );
+  }
+  return _jwks;
+}
+
+// ─── Auth helper ────────────────────────────────────────────────────────────
+// Verifies the Supabase session JWT from the Authorization header.
+// Returns { userId, email, claims } on success, or { error, status } on failure.
+// Never logs the token. Never echoes the raw jose error to the client.
+async function verifyAuth(request, env) {
+  const authHeader = request.headers.get('Authorization');
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return { error: 'Missing Authorization header', status: 401 };
+  }
+  const token = authHeader.slice(7).trim();
+  if (!token) {
+    return { error: 'Empty bearer token', status: 401 };
+  }
+
+  // Fail closed if SUPABASE_URL isn't configured — we can't build the JWKS URL.
+  if (!env.SUPABASE_URL) {
+    console.error('[auth] SUPABASE_URL is not configured');
+    return { error: 'Server not configured for authentication', status: 500 };
+  }
+
+  try {
+    const JWKS = getJWKS(env.SUPABASE_URL);
+    // Supabase access tokens (this project, asymmetric signing):
+    //   alg: ES256 (ECDSA with P-256 curve)
+    //   aud: "authenticated" (for signed-in users)
+    //   iss: <SUPABASE_URL>/auth/v1
+    //   sub: <user UUID>
+    //   exp: epoch seconds — jose enforces this automatically
+    const { payload } = await jwtVerify(token, JWKS, {
+      audience: 'authenticated',
+      algorithms: ['ES256']
+    });
+    if (!payload.sub) {
+      return { error: 'Token missing sub claim', status: 401 };
+    }
+    return {
+      userId: payload.sub,
+      email: payload.email || null,
+      claims: payload
+    };
+  } catch (e) {
+    // Common causes: ERR_JWT_EXPIRED, ERR_JWT_CLAIM_VALIDATION_FAILED,
+    // ERR_JWS_SIGNATURE_VERIFICATION_FAILED, ERR_JWS_INVALID,
+    // ERR_JWKS_NO_MATCHING_KEY (token signed with a kid we haven't cached yet
+    // — jose auto-refreshes and retries, so a sustained failure here means
+    // something is genuinely wrong).
+    // Log the code/name server-side for debugging; return vague error to client.
+    console.warn('[auth] JWT verification failed:', e.code || e.name || e.message);
+    return { error: 'Invalid or expired token', status: 401 };
+  }
+}
+
+// ─── Entry point ────────────────────────────────────────────────────────────
 export default {
   async fetch(request, env) {
+    const corsOrigin = env.TETHER_ALLOWED_ORIGIN || '*';
 
-    // Handle CORS preflight
+    // CORS preflight — never requires auth.
     if (request.method === 'OPTIONS') {
       return new Response(null, {
         headers: {
           ...CORS_HEADERS,
-          'Access-Control-Allow-Origin': env.TETHER_ALLOWED_ORIGIN,
+          'Access-Control-Allow-Origin': corsOrigin
         }
       });
     }
 
     const corsHeader = {
-      'Access-Control-Allow-Origin': env.TETHER_ALLOWED_ORIGIN,
-      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': corsOrigin,
+      'Content-Type': 'application/json'
     };
 
     const { pathname } = new URL(request.url);
 
-    try {
-      if (pathname === '/chat')         return handleChat(request, env, corsHeader);
-      if (pathname === '/get-memory')   return handleGetMemory(request, env, corsHeader);
-      if (pathname === '/save-summary') return handleSaveSummary(request, env, corsHeader);
-      if (pathname === '/adkar')        return handleAdkar(request, env, corsHeader);
+    // All application endpoints require a valid Supabase session JWT.
+    // We gate here (before route dispatch) so no handler can forget to check.
+    const auth = await verifyAuth(request, env);
+    if (auth.error) {
+      return new Response(
+        JSON.stringify({ error: auth.error }),
+        { status: auth.status, headers: corsHeader }
+      );
+    }
 
+    try {
+      if (pathname === '/chat')         return handleChat(request, env, corsHeader, auth);
+      if (pathname === '/get-memory')   return handleGetMemory(request, env, corsHeader, auth);
+      if (pathname === '/save-summary') return handleSaveSummary(request, env, corsHeader, auth);
+      if (pathname === '/adkar')        return handleAdkar(request, env, corsHeader, auth);
       return new Response(
         JSON.stringify({ error: 'Not found' }),
         { status: 404, headers: corsHeader }
       );
-
     } catch (err) {
+      console.error('[handler] unhandled error:', err);
       return new Response(
         JSON.stringify({ error: err.message }),
         { status: 500, headers: corsHeader }
@@ -48,12 +153,9 @@ export default {
   }
 };
 
-// =============================================
-// CHAT HANDLER
-// =============================================
-async function handleChat(request, env, corsHeader) {
+// ─── /chat ──────────────────────────────────────────────────────────────────
+async function handleChat(request, env, corsHeader, auth) {
   const { messages, memoryContext } = await request.json();
-
   const systemPrompt = buildSystemPrompt(memoryContext);
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -67,19 +169,18 @@ async function handleChat(request, env, corsHeader) {
       model: 'claude-sonnet-4-20250514',
       max_tokens: 1000,
       system: systemPrompt,
-      messages: messages
+      messages
     })
   });
-
   const data = await response.json();
   return new Response(JSON.stringify(data), { headers: corsHeader });
 }
 
-// =============================================
-// GET MEMORY HANDLER
-// =============================================
-async function handleGetMemory(request, env, corsHeader) {
-  const { userId } = await request.json();
+// ─── /get-memory ────────────────────────────────────────────────────────────
+async function handleGetMemory(request, env, corsHeader, auth) {
+  // SECURITY: userId comes from the verified JWT — NOT from the request body.
+  // Any body-supplied userId is ignored. This is the core of the hardening.
+  const userId = auth.userId;
 
   const summariesRes = await fetch(
     `${env.SUPABASE_URL}/rest/v1/session_summaries?user_id=eq.${userId}&order=session_date.desc&limit=5`,
@@ -115,18 +216,17 @@ async function handleGetMemory(request, env, corsHeader) {
   const adkar = await adkarRes.json();
 
   const memoryContext = buildMemoryContext(summaries, profile[0], adkar[0]);
-
   return new Response(
     JSON.stringify({ memoryContext }),
     { headers: corsHeader }
   );
 }
 
-// =============================================
-// SAVE SUMMARY HANDLER
-// =============================================
-async function handleSaveSummary(request, env, corsHeader) {
-  const { userId, conversation } = await request.json();
+// ─── /save-summary ──────────────────────────────────────────────────────────
+async function handleSaveSummary(request, env, corsHeader, auth) {
+  // SECURITY: userId from JWT. Body-supplied userId is ignored.
+  const { conversation } = await request.json();
+  const userId = auth.userId;
 
   const summaryRes = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -160,19 +260,18 @@ ${conversation}`
       }]
     })
   });
-
   const summaryData = await summaryRes.json();
 
   let parsed;
   try {
     const text = summaryData.content[0].text.trim();
     parsed = JSON.parse(text);
-  } catch(e) {
+  } catch (e) {
     parsed = {
-      summary: "Session completed",
+      summary: 'Session completed',
       themes: [],
       tools_used: [],
-      emotional_tone: "neutral"
+      emotional_tone: 'neutral'
     };
   }
 
@@ -198,17 +297,16 @@ ${conversation}`
   );
 }
 
-// =============================================
-// ADKAR HANDLER
-// =============================================
-async function handleAdkar(request, env, corsHeader) {
-  const { userId, scores, changeContext } = await request.json();
+// ─── /adkar ─────────────────────────────────────────────────────────────────
+async function handleAdkar(request, env, corsHeader, auth) {
+  // SECURITY: userId from JWT. Body-supplied userId is ignored.
+  const { scores, changeContext } = await request.json();
+  const userId = auth.userId;
 
-  const stages = ['awareness','desire','knowledge','ability','reinforcement'];
+  const stages = ['awareness', 'desire', 'knowledge', 'ability', 'reinforcement'];
   let lowestStage = stages[0];
   let lowestScore = scores.awareness;
-
-  stages.forEach(stage => {
+  stages.forEach((stage) => {
     if (scores[stage] < lowestScore) {
       lowestScore = scores[stage];
       lowestStage = stage;
@@ -240,17 +338,14 @@ async function handleAdkar(request, env, corsHeader) {
   );
 }
 
-// =============================================
-// MEMORY CONTEXT BUILDER
-// =============================================
+// ─── Memory context (unchanged) ─────────────────────────────────────────────
 function buildMemoryContext(summaries, profile, adkar) {
   if (!summaries?.length && !profile && !adkar) return '';
-
   let context = 'COACHING HISTORY FOR THIS EMPLOYEE:\n\n';
 
   if (summaries?.length) {
     context += 'Recent sessions:\n';
-    summaries.forEach(s => {
+    summaries.forEach((s) => {
       const date = s.session_date?.split('T')[0] || 'recent';
       context += `- ${date}: ${s.summary}\n`;
       if (s.themes?.length) context += `  Themes: ${s.themes.join(', ')}\n`;
@@ -274,13 +369,10 @@ function buildMemoryContext(summaries, profile, adkar) {
   }
 
   context += `Use this history to provide continuity. Reference prior sessions naturally when relevant. Do not recite this history back verbatim.`;
-
   return context;
 }
 
-// =============================================
-// SYSTEM PROMPT BUILDER
-// =============================================
+// ─── System prompt (unchanged) ──────────────────────────────────────────────
 function buildSystemPrompt(memoryContext) {
   return `You are Tether, an AI psychological resilience coach for employees in corporate environments. You are warm, direct, and psychologically sophisticated — not a cheerleader, not a therapist.
 
