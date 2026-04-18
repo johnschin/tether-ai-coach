@@ -2,6 +2,11 @@ let currentUser = null;
 let adkarScores = {};
 let appShown = false;
 
+// Phase B: cooldown so users can't spam "Send me a login link" and burn their
+// Supabase email rate limit. 60s matches the typical delivery window.
+const MAGIC_LINK_COOLDOWN_MS = 60_000;
+let magicLinkCooldownTimer = null;
+
 window.addEventListener('DOMContentLoaded', async () => {
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').catch(console.error);
@@ -37,29 +42,85 @@ async function enterApp(user) {
   appShown = true;
   currentUser = user;
 
-  // Save preferred name to user profile if provided during sign-up
-  const storedName = localStorage.getItem('tether_preferred_name');
-  if (storedName) {
+  // Resolve the best-known preferred name:
+  //   1. auth.user_metadata (set via signInWithOtp options.data — survives cross-device)
+  //   2. localStorage fallback (for users who signed up on the old version before deploy)
+  const metaName = user.user_metadata?.preferred_name || null;
+  const legacyStoredName = localStorage.getItem('tether_preferred_name');
+  const bestName = metaName || legacyStoredName || null;
+
+  // The server-side trigger has already created a user_profiles row with whatever
+  // name was in raw_user_meta_data at signup time. This upsert fills it in
+  // post-hoc for users who came in via the legacy localStorage path, or updates
+  // an older name if user_metadata was updated. Safe to run unconditionally.
+  if (bestName) {
     try {
-      await supabaseClient.auth.updateUser({ data: { preferred_name: storedName } });
-      await supabaseClient.from('user_profiles').upsert({ id: user.id, preferred_name: storedName }, { onConflict: 'id' });
-    } catch (e) { console.error('Could not save preferred name:', e); }
+      if (metaName !== bestName) {
+        await supabaseClient.auth.updateUser({ data: { preferred_name: bestName } });
+      }
+      await supabaseClient
+        .from('user_profiles')
+        .upsert({ id: user.id, preferred_name: bestName }, { onConflict: 'id' });
+    } catch (e) {
+      console.error('Could not save preferred name:', e);
+      // Fire and forget — never block user flow on observability
+      logSignupError('post_auth_upsert', {
+        message: e?.message,
+        code: e?.code,
+        email: user.email,
+        metadata: { name_source: metaName ? 'auth_metadata' : 'localStorage' }
+      });
+    }
+  }
+  // Clean up legacy localStorage once we've migrated it
+  if (legacyStoredName) {
     localStorage.removeItem('tether_preferred_name');
   }
 
   await startUserSession();
 }
 
+// ─── Corporate Email Detection ─────────────────────────────────────
+// Phase B: HARD BLOCK. Work emails disable the submit button and show an
+// error-style message. The privacy promise is the whole product — we do not
+// allow employer-visible email addresses into the user base.
 function checkCorporateEmail(value) {
-  const warning = document.getElementById('corp-email-warning');
-  if (!warning) return;
+  const warningEl = document.getElementById('corp-email-warning');
+  const btn = document.getElementById('magic-btn');
+  const errorEl = document.getElementById('auth-error');
+
+  if (!warningEl || !btn) return;
+
+  // Not enough typed yet to decide — neutral state.
   if (!value || !value.includes('@')) {
-    warning.style.display = 'none';
+    warningEl.style.display = 'none';
+    // Only re-enable if we're not in cooldown from a prior send.
+    if (!magicLinkCooldownTimer) {
+      btn.disabled = false;
+    }
+    if (errorEl) errorEl.textContent = '';
     return;
   }
-  warning.style.display = isPersonalEmail(value) ? 'none' : 'block';
+
+  const domainPart = value.split('@')[1];
+  // Domain still being typed (e.g. "x@" or "x@gm") — don't judge yet.
+  if (!domainPart || !domainPart.includes('.')) {
+    warningEl.style.display = 'none';
+    if (!magicLinkCooldownTimer) btn.disabled = false;
+    return;
+  }
+
+  if (isPersonalEmail(value)) {
+    warningEl.style.display = 'none';
+    if (!magicLinkCooldownTimer) btn.disabled = false;
+    if (errorEl) errorEl.textContent = '';
+  } else {
+    warningEl.style.display = 'block';
+    btn.disabled = true;
+  }
 }
 
+// ─── Magic Link Send ───────────────────────────────────────────────
 async function handleMagicLink() {
   const emailInput = document.getElementById('magic-email');
   const nameInput = document.getElementById('magic-name');
@@ -68,12 +129,31 @@ async function handleMagicLink() {
   const email = emailInput.value.trim().toLowerCase();
   const preferredName = nameInput.value.trim();
 
+  // Basic format check
   if (!email || !email.includes('@') || !email.includes('.')) {
     errorEl.textContent = 'Please enter a valid email address.';
     return;
   }
 
-  // Store name locally so we can save it after auth completes
+  // Phase B HARD BLOCK: work email refused at submit time, not just warned.
+  // Defense in depth — the button is already disabled by checkCorporateEmail
+  // when a work email is detected, but if that UI state is bypassed we still
+  // refuse here and log the attempt.
+  if (!isPersonalEmail(email)) {
+    errorEl.textContent =
+      "Please use a personal email (Gmail, Yahoo, iCloud, Outlook, etc.) to sign up. " +
+      "Work emails aren't accepted — this keeps your conversations fully separate from your employer.";
+    logSignupError('work_email_blocked', {
+      email,
+      message: 'Work email submission rejected by client-side block',
+      metadata: { domain: email.split('@')[1] }
+    });
+    return;
+  }
+
+  // Store name locally as a belt-and-suspenders fallback (if user opens the
+  // link in the same browser, we'll pick this up in enterApp). The primary
+  // path is options.data → raw_user_meta_data, which survives cross-device.
   if (preferredName) {
     localStorage.setItem('tether_preferred_name', preferredName);
   }
@@ -83,17 +163,60 @@ async function handleMagicLink() {
   btn.textContent = 'Sending link...';
 
   try {
-    await sendMagicLink(email);
-    // Show check-email state
+    await sendMagicLink(email, preferredName);
+
+    // Success: show check-your-email state + arm the cooldown.
     document.getElementById('magic-form').style.display = 'none';
     document.getElementById('check-email').style.display = 'block';
     document.getElementById('sent-email-display').textContent = email;
+    armMagicLinkCooldown();
+
   } catch (err) {
-    errorEl.textContent = err.message || 'Something went wrong. Please try again.';
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Send me a login link';
+    const { friendly, code, isRateLimit } = classifyAuthError(err);
+    errorEl.textContent = friendly;
+
+    logSignupError('magic_link_send', {
+      email,
+      code,
+      message: err?.message,
+      metadata: { isRateLimit }
+    });
+
+    // On rate-limit, also arm the cooldown so the user doesn't immediately
+    // retry and make it worse. On other errors, re-enable the button so they
+    // can fix and retry.
+    if (isRateLimit) {
+      armMagicLinkCooldown();
+    } else {
+      btn.disabled = false;
+      btn.textContent = 'Send me a login link';
+    }
   }
+}
+
+// ─── Cooldown management for the "Send me a login link" button ────
+function armMagicLinkCooldown() {
+  const btn = document.getElementById('magic-btn');
+  if (!btn) return;
+  btn.disabled = true;
+
+  const startedAt = Date.now();
+  if (magicLinkCooldownTimer) clearInterval(magicLinkCooldownTimer);
+
+  const tick = () => {
+    const remainingMs = MAGIC_LINK_COOLDOWN_MS - (Date.now() - startedAt);
+    if (remainingMs <= 0) {
+      clearInterval(magicLinkCooldownTimer);
+      magicLinkCooldownTimer = null;
+      btn.disabled = false;
+      btn.textContent = 'Send me a login link';
+      return;
+    }
+    const s = Math.ceil(remainingMs / 1000);
+    btn.textContent = `Check your email (resend in ${s}s)`;
+  };
+  tick();
+  magicLinkCooldownTimer = setInterval(tick, 1000);
 }
 
 function resetMagicForm() {
@@ -105,6 +228,9 @@ function resetMagicForm() {
   document.getElementById('magic-name').value = '';
   document.getElementById('magic-email').value = '';
   document.getElementById('magic-name').focus();
+  // Note: we deliberately do NOT clear the cooldown here — the rate limit
+  // still applies to the prior email. If the user enters a different email,
+  // the button will re-enable once the cooldown expires.
 }
 
 async function handleSignOut() {
@@ -132,7 +258,14 @@ async function submitAdkar() {
   const missing = required.filter(s => !adkarScores[s]);
   if (missing.length > 0) { document.getElementById(`scale-${missing[0]}`).scrollIntoView({ behavior: 'smooth' }); return; }
   const changeContext = document.getElementById('adkar-context-select').value;
-  await saveAdkarScores(currentUser.id, adkarScores, changeContext);
+  try {
+    await saveAdkarScores(currentUser.id, adkarScores, changeContext);
+  } catch (e) {
+    logSignupError('adkar_submit', {
+      message: e?.message, code: e?.code,
+      email: currentUser?.email, metadata: { change_context: changeContext }
+    });
+  }
   showScreen('chat-screen');
 }
 function skipAdkar() { showScreen('chat-screen'); }

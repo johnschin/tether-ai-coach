@@ -49,7 +49,7 @@
   .auth-btn:hover { opacity: 0.9; }
   .auth-btn:disabled { opacity: 0.4; cursor: not-allowed; }
   .auth-privacy { font-size: 11px; color: var(--muted); text-align: center; margin-top: 20px; line-height: 1.6; }
-  .auth-error { font-size: 12px; color: #d32f2f; margin-top: 12px; text-align: center; min-height: 18px; }
+  .auth-error { font-size: 12px; color: #d32f2f; margin-top: 12px; text-align: center; min-height: 18px; line-height: 1.5; }
   #adkar-screen { background: var(--cream); padding: 48px 24px 32px; overflow-y: auto; }
   .adkar-header { margin-bottom: 32px; }
   .adkar-header h2 { font-family: 'Playfair Display', serif; font-size: 24px; font-weight: 600; color: #1a1a1a; margin-bottom: 8px; }
@@ -110,7 +110,7 @@
     <!-- Magic Link Form -->
     <div id="magic-form">
       <div class="auth-privacy-box">
-        <p>&#128274; Your conversations are private. Use a <strong>personal email</strong> so your employer never has access to what you share here. Your company only receives anonymous, aggregate insights. Upon submitting your first name and personal email, an email will be sent to you from Supabase. This email contains additional instructions and a link which you can always use to return and use Tether AI.</p>
+        <p>&#128274; Your conversations are private. <strong>Please use a personal email</strong> (Gmail, Yahoo, iCloud, Outlook, etc.) &mdash; work emails aren't accepted so your employer never has access to what you share here. Your company only receives anonymous, aggregate insights. After you enter your first name and personal email, a login link will be sent to you. Click that link to start &mdash; you can use it anytime to return.</p>
       </div>
       <div class="form-group">
         <label>How would you like to be addressed?</label>
@@ -122,7 +122,7 @@
           oninput="checkCorporateEmail(this.value)"
           onkeydown="if(event.key==='Enter'){event.preventDefault();handleMagicLink();}">
         <div class="corp-email-warning" id="corp-email-warning">
-          This looks like a work email. For your privacy, we recommend using a personal email (Gmail, Yahoo, iCloud, etc.) so your employer cannot access your conversations.
+          <strong>Please use a personal email.</strong> Work emails aren't accepted here &mdash; this is how we keep your conversations fully separate from your employer. Try Gmail, Yahoo, iCloud, Outlook, or another personal provider.
         </div>
       </div>
       <button class="auth-btn" id="magic-btn" onclick="handleMagicLink()">Send me a login link</button>
@@ -137,7 +137,7 @@
         </svg>
       </div>
       <h3>Check your email</h3>
-      <p>We sent a login link to <strong id="sent-email-display"></strong>.<br>Click the link in that email to start your session.</p>
+      <p>We sent a login link to <strong id="sent-email-display"></strong>.<br>Click the link in that email to start your session. It can take up to a minute to arrive &mdash; please check spam if you don't see it.</p>
       <p style="font-size:12px;">Didn't get it? Check spam, or <button class="auth-link-btn" onclick="resetMagicForm()">try a different email</button></p>
     </div>
 
