@@ -17,17 +17,28 @@ async function getUser() {
 }
 
 // ─── Magic Link Auth ───────────────────────────────────────────────
-// preferredName now flows through options.data → auth.users.raw_user_meta_data
-// so it survives cross-device magic-link clicks (user types name on laptop,
-// clicks link on phone → name is still on the account). The server-side
-// handle_new_user trigger reads this into user_profiles.preferred_name.
-async function sendMagicLink(email, preferredName) {
+// preferredName + signupCode both flow through options.data →
+// auth.users.raw_user_meta_data so they survive cross-device magic-link
+// clicks (user types name/code on laptop, clicks link on phone → both
+// still on the account). The server-side handle_new_user trigger reads
+// preferred_name into user_profiles.preferred_name; signup_code is read
+// by enterApp() on first sign-in and passed to the redeem_signup_code RPC.
+async function sendMagicLink(email, preferredName, signupCode) {
   const options = {
     shouldCreateUser: true,
     emailRedirectTo: window.location.origin + window.location.pathname,
   };
+  const data = {};
   if (preferredName && preferredName.trim()) {
-    options.data = { preferred_name: preferredName.trim() };
+    data.preferred_name = preferredName.trim();
+  }
+  if (signupCode && signupCode.trim()) {
+    // Cap at 64 chars defensively — matches the HTML maxlength and the
+    // realistic upper bound for a company-distributed code.
+    data.signup_code = signupCode.trim().slice(0, 64);
+  }
+  if (Object.keys(data).length > 0) {
+    options.data = data;
   }
   const { error } = await supabaseClient.auth.signInWithOtp({ email, options });
   if (error) throw error;
