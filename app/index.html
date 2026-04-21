@@ -10,6 +10,36 @@
 <title>Tether AI Coach</title>
 <link rel="manifest" href="manifest.json">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script>
+  // ─── Magic-link callback flicker suppressor ────────────────────────
+  // Detected at parse-time so it runs BEFORE the body renders. Without
+  // this, users clicking a magic link see ~1-2s of auth-screen before
+  // supabase-js parses the URL hash, captures the session, and our
+  // SIGNED_IN handler switches to adkar-screen. We instead show a
+  // minimal "Signing you in…" screen during that window.
+  //
+  // Magic links land at this URL with either:
+  //   #access_token=...         (implicit flow — current default)
+  //   ?code=...                 (PKCE flow — if we ever switch)
+  //
+  // Safety net: if the session never establishes within 10s (expired link,
+  // network failure, etc.), we drop the class so the regular auth-screen
+  // shows again — auth-screen still has `active` from initial render, so
+  // removing the suppression naturally reveals it.
+  (function() {
+    try {
+      var hash = window.location.hash || '';
+      var search = window.location.search || '';
+      var isCallback = /access_token=/.test(hash) || /[?&]code=/.test(search);
+      if (isCallback) {
+        document.documentElement.classList.add('auth-callback');
+        window.setTimeout(function() {
+          document.documentElement.classList.remove('auth-callback');
+        }, 10000);
+      }
+    } catch (e) { /* never block render */ }
+  })();
+</script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -99,9 +129,24 @@
   .send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
   .welcome-msg { text-align: center; padding: 32px 16px; color: var(--muted); font-size: 13px; line-height: 1.7; }
   .welcome-msg strong { display: block; font-family: 'Playfair Display', serif; font-size: 18px; color: var(--plum); font-weight: 400; margin-bottom: 8px; }
+  /* Magic-link callback loading screen — see head-script flicker suppressor. */
+  #loading-screen { justify-content: center; align-items: center; padding: 32px 24px; background: linear-gradient(135deg, var(--cream) 0%, var(--sand) 100%); }
+  .loading-content { text-align: center; }
+  .loading-spinner { width: 36px; height: 36px; margin: 0 auto 18px; border: 3px solid var(--sand); border-top-color: var(--plum); border-radius: 50%; animation: loadingSpin 0.8s linear infinite; }
+  @keyframes loadingSpin { to { transform: rotate(360deg); } }
+  .loading-text { font-family: 'Playfair Display', serif; font-size: 18px; color: var(--plum); letter-spacing: 0.2px; }
+  html.auth-callback #auth-screen { display: none !important; }
+  html.auth-callback #loading-screen { display: flex !important; }
 </style>
 </head>
 <body>
+
+<div id="loading-screen" class="screen">
+  <div class="loading-content">
+    <div class="loading-spinner"></div>
+    <div class="loading-text">Signing you in&hellip;</div>
+  </div>
+</div>
 
 <div id="auth-screen" class="screen active">
   <div class="auth-logo">

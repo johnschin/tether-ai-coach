@@ -30,7 +30,11 @@ window.addEventListener('DOMContentLoaded', async () => {
   const session = await getSession();
   if (session?.user) {
     enterApp(session.user);
-  } else {
+  } else if (!document.documentElement.classList.contains('auth-callback')) {
+    // No session and we're NOT in a magic-link callback — show auth-screen.
+    // If we ARE in callback, the head-script flicker suppressor is keeping
+    // the loading-screen visible; we wait for SIGNED_IN via onAuthStateChange
+    // (or for the 10s safety timeout to drop us back to auth-screen).
     showScreen('auth-screen');
   }
 
@@ -483,6 +487,10 @@ function showTyping(visible) {
   document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
 }
 function showScreen(id) {
+  // Drop the magic-link callback suppression once we're transitioning to a
+  // real screen — normal .screen.active visibility takes over from here.
+  // Safe to call even when the class isn't present (no-op).
+  document.documentElement.classList.remove('auth-callback');
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
 }
