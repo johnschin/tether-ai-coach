@@ -115,7 +115,11 @@ function checkCorporateEmail(value) {
     return;
   }
 
-  if (isPersonalEmail(value)) {
+  // isAllowedEmail covers personal-email domains AND the explicit ADMIN_EMAILS
+  // allowlist (auth.js), so internal admin accounts on custom domains
+  // (e.g. john@guidetoself.com) don't get the orange "use personal email"
+  // warning and don't have the submit button disabled.
+  if (isAllowedEmail(value)) {
     warningEl.style.display = 'none';
     if (!magicLinkCooldownTimer) btn.disabled = false;
     if (errorEl) errorEl.textContent = '';
@@ -144,7 +148,9 @@ async function handleMagicLink() {
   // Defense in depth — the button is already disabled by checkCorporateEmail
   // when a work email is detected, but if that UI state is bypassed we still
   // refuse here and log the attempt.
-  if (!isPersonalEmail(email)) {
+  // isAllowedEmail bypasses the block for the explicit ADMIN_EMAILS allowlist
+  // in auth.js (Tether-internal admin accounts on custom domains).
+  if (!isAllowedEmail(email)) {
     errorEl.textContent =
       "Please use a personal email (Gmail, Yahoo, iCloud, Outlook, etc.) to sign up. " +
       "Work emails aren't accepted — this keeps your conversations fully separate from your employer.";
@@ -246,15 +252,7 @@ async function handleSignOut() {
 
 async function startUserSession() {
   const name = currentUser.user_metadata?.preferred_name || currentUser.email?.split('@')[0];
-  if (name) {
-    document.getElementById('user-greeting').textContent = `Hi ${name} — your session is private`;
-    // Personalize the big welcome card on chat-screen too (mirrors subtitle pattern above).
-    // Fallback copy in the HTML remains for users with no known name.
-    const welcomeStrong = document.getElementById('welcome-greeting');
-    if (welcomeStrong) {
-      welcomeStrong.textContent = `Hi ${name} — I'm Tether, your resilience coach.`;
-    }
-  }
+  if (name) document.getElementById('user-greeting').textContent = `Hi ${name} — your session is private`;
   await initSession(currentUser.id);
   showScreen('adkar-screen');
 }

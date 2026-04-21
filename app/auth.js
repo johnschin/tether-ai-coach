@@ -81,6 +81,35 @@ function isPersonalEmail(email) {
   return PERSONAL_DOMAINS.has(domain);
 }
 
+// ─── Admin Email Bypass ────────────────────────────────────────────
+// Tether-internal admin accounts that use a custom domain rather than
+// webmail. These bypass the personal-email hard block so internal admins
+// can access the HR dashboard from any device without friction.
+//
+// Add new internal admins here explicitly — this is deliberate, not
+// automatic. Do NOT add customer/HR-admin emails here (e.g. Gilead HR
+// contacts); those need a per-company admin flow designed separately.
+//
+// Matching is case-insensitive on the full address. Domain-level matching
+// is intentionally NOT used — we don't want anyone who spins up an email
+// at one of these domains to auto-bypass.
+const ADMIN_EMAILS = new Set([
+  'john@guidetoself.com',
+]);
+
+function isAdminEmail(email) {
+  if (!email) return false;
+  return ADMIN_EMAILS.has(email.toLowerCase().trim());
+}
+
+// Gatekeeping helper: true if the email is allowed through the signup
+// block — i.e. a personal/webmail address OR an explicit admin allowlist
+// match. Use this (not isPersonalEmail directly) anywhere we're deciding
+// whether to let a signup/login attempt proceed.
+function isAllowedEmail(email) {
+  return isPersonalEmail(email) || isAdminEmail(email);
+}
+
 // ─── Error Observability (DB-based) ────────────────────────────────
 // Writes to public.signup_errors. Silent on failure — never blocks user flow.
 // Allowed error_stage values (enforced by RLS policy):
