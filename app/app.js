@@ -252,7 +252,15 @@ async function handleSignOut() {
 
 async function startUserSession() {
   const name = currentUser.user_metadata?.preferred_name || currentUser.email?.split('@')[0];
-  if (name) document.getElementById('user-greeting').textContent = `Hi ${name} — your session is private`;
+  if (name) {
+    document.getElementById('user-greeting').textContent = `Hi ${name} — your session is private`;
+    // Personalize the big welcome card on chat-screen too (mirrors subtitle pattern above).
+    // Fallback copy in the HTML remains for users with no known name.
+    const welcomeStrong = document.getElementById('welcome-greeting');
+    if (welcomeStrong) {
+      welcomeStrong.textContent = `Hi ${name} — I'm Tether, your resilience coach.`;
+    }
+  }
   await initSession(currentUser.id);
   showScreen('adkar-screen');
 }
