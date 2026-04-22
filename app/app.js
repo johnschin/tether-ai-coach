@@ -15,34 +15,22 @@ let pendingRedeemStatus = null;
 // Phase D (2026-04-21): consent version string. Must match the
 // data-consent-version attribute on #consent-screen in index.html AND the
 // visible copy in the consent body — bump all three in lockstep whenever
-// we revise the consent text. The backend record_consent() RPC uses this
-// string as consent_text_shown so every DB row is attributable to the
-// exact text the user saw.
+// we revise the consent text.
 const CONSENT_VERSION = 'tether-v1-2026-04';
+
+// Phase F (2026-04-22): trial-ended reason carried into showTrialEndedScreen
+// so we can surface slightly different copy. Values: null | string.
+let trialEndReason = null;
 
 window.addEventListener('DOMContentLoaded', async () => {
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').catch(console.error);
   }
 
-  // NOTE: Do NOT manually clean up the #access_token hash here.
-  // supabase-js v2 (detectSessionInUrl: true, which is the default) parses the
-  // hash asynchronously on client init and cleans up the URL itself once the
-  // session is captured. A manual history.replaceState in DOMContentLoaded
-  // races with that async parse and, on slower devices like mobile, wipes the
-  // tokens before supabase-js can read them — breaking cross-device magic-link
-  // sign-in. Verified 2026-04-18: removing the manual cleanup fixes phone
-  // clicks after laptop-initiated signup. (Diagnosed from auth logs showing
-  // server-side verify succeeded but client-side session never established.)
-
   const session = await getSession();
   if (session?.user) {
     enterApp(session.user);
   } else if (!document.documentElement.classList.contains('auth-callback')) {
-    // No session and we're NOT in a magic-link callback — show auth-screen.
-    // If we ARE in callback, the head-script flicker suppressor is keeping
-    // the loading-screen visible; we wait for SIGNED_IN via onAuthStateChange
-    // (or for the 10s safety timeout to drop us back to auth-screen).
     showScreen('auth-screen');
   }
 
@@ -58,24 +46,16 @@ window.addEventListener('DOMContentLoaded', async () => {
   });
 });
 
-// ─── Auth Helpers ──────────────────────────────────────────────────
+// ─── Auth Helpers ──────────────────────────────────────────────────────────
 async function enterApp(user) {
   if (appShown) return;
   appShown = true;
   currentUser = user;
 
-  // Resolve the best-known preferred name:
-  //   1. auth.user_metadata (set via signInWithOtp options.data — survives cross-device)
-  //   2. localStorage fallback (for users who signed up on the old version before deploy)
-  const metaName = user.user_metadata?.preferred_name || null;
+  const metaName        = user.user_metadata?.preferred_name || null;
   const legacyStoredName = localStorage.getItem('tether_preferred_name');
-  const bestName = metaName || legacyStoredName || null;
+  const bestName         = metaName || legacyStoredName || null;
 
-  // Defense in depth: ensure a user_profiles row exists for this user,
-  // regardless of whether we have a name. The `on_auth_user_created`
-  // trigger creates one on signup, but its EXCEPTION block swallows
-  // failures silently — so we upsert here to guarantee downstream code
-  // (ADKAR save, memory fetch, RLS admin helpers) has a row to work with.
   const profileUpsert = { id: user.id };
   if (bestName) profileUpsert.preferred_name = bestName;
   try {
@@ -87,35 +67,20 @@ async function enterApp(user) {
       .upsert(profileUpsert, { onConflict: 'id' });
   } catch (e) {
     console.error('Could not ensure user_profiles row:', e);
-    // Fire and forget — never block user flow on observability
     logSignupError('post_auth_upsert', {
-      message: e?.message,
-      code: e?.code,
-      email: user.email,
+      message:  e?.message,
+      code:     e?.code,
+      email:    user.email,
       metadata: {
         name_source: metaName ? 'auth_metadata' : (legacyStoredName ? 'localStorage' : 'none'),
-        has_name: !!bestName
+        has_name:    !!bestName
       }
     });
   }
-  // Clean up legacy localStorage once we've migrated it
-  if (legacyStoredName) {
-    localStorage.removeItem('tether_preferred_name');
-  }
+  if (legacyStoredName) localStorage.removeItem('tether_preferred_name');
 
-  // Phase C: attempt signup-code redemption if one was captured at signup.
-  // No-op if auth metadata doesn't carry a signup_code. Non-blocking on
-  // failure — the user enters the app with company_id = NULL and can be
-  // linked later via admin tooling.
   await maybeRedeemSignupCode(user);
 
-  // Phase D (2026-04-21): gate entry on consent. hasConsented() returns
-  // true iff the user has an 'initial_consent' (or 'reacknowledged') row
-  // in consent_events for the CURRENT CONSENT_VERSION. First-time users
-  // and anyone predating this phase go through the consent screen; they
-  // enter ADKAR only after ack. Consented users skip straight to ADKAR.
-  // On fatal errors (network, RLS glitch) we fail-closed — show consent
-  // rather than silently skip, since the RPC is idempotent.
   const consented = await hasConsented(user.id);
   if (consented) {
     await startUserSession();
@@ -124,60 +89,45 @@ async function enterApp(user) {
   }
 }
 
-// ─── Signup-code redemption (Phase C) ──────────────────────────────
-// One-shot attempt triggered on the first sign-in after signup. Reads the
-// code from auth.user_metadata.signup_code (populated by sendMagicLink at
-// signup time), calls the SECURITY DEFINER `redeem_signup_code` RPC, and
-// records the outcome for the banner shown on adkar-screen.
-//
-// Metadata clearing policy: we clear signup_code from auth metadata on
-// every TERMINAL outcome (ok / already_redeemed / invalid / inactive /
-// expired / exhausted). We do NOT clear on unexpected RPC errors (network,
-// 500s) so those can be retried on the next sign-in. Trade-off: a typo'd
-// code will get one attempt then disappear — the user can't keep retrying
-// on every sign-in. They'd need to get a fresh code + admin to re-link.
+// ─── Signup-code redemption (Phase C) ──────────────────────────────────────
 async function maybeRedeemSignupCode(user) {
   const rawCode = user.user_metadata?.signup_code;
   if (!rawCode || typeof rawCode !== 'string' || !rawCode.trim()) return;
   const code = rawCode.trim();
 
-  let status = null;
+  let status    = null;
   let companyId = null;
-  let rpcThrew = false;
+  let rpcThrew  = false;
 
   try {
     const { data, error } = await supabaseClient.rpc('redeem_signup_code', {
-      code_input: code,
+      code_input:    code,
       user_id_input: user.id,
     });
     if (error) throw error;
     if (Array.isArray(data) && data.length > 0) {
-      status = data[0].status;
+      status    = data[0].status;
       companyId = data[0].company_id;
     }
   } catch (e) {
     rpcThrew = true;
     console.warn('[signup-code] RPC threw:', e?.message || e);
     logSignupError('signup_code_redeem', {
-      email: user.email,
-      message: e?.message,
-      code: e?.code,
+      email:    user.email,
+      message:  e?.message,
+      code:     e?.code,
       metadata: { code_attempted: code.slice(0, 64), stage: 'rpc_threw' }
     });
   }
 
-  // Log any deterministic non-success outcome for pilot-day observability.
   if (!rpcThrew && status && status !== 'ok' && status !== 'already_redeemed') {
     logSignupError('signup_code_redeem', {
-      email: user.email,
-      message: `Code rejected: ${status}`,
+      email:    user.email,
+      message:  `Code rejected: ${status}`,
       metadata: { code_attempted: code.slice(0, 64), status }
     });
   }
 
-  // Clear the code from auth metadata on any terminal RPC outcome so a
-  // bad code doesn't retry forever on every sign-in. On transport-level
-  // failures (rpcThrew), keep it for a next-sign-in retry.
   if (!rpcThrew) {
     try {
       await supabaseClient.auth.updateUser({ data: { signup_code: null } });
@@ -189,11 +139,6 @@ async function maybeRedeemSignupCode(user) {
   pendingRedeemStatus = { status: status || (rpcThrew ? 'error' : 'unknown'), companyId };
 }
 
-// Renders a small dismissible banner at the top of the adkar-screen to
-// confirm (or acknowledge the failure of) a signup-code redemption. No
-// new HTML — the element is created and inserted here to keep the index
-// surface minimal. Silent on 'already_redeemed' (no-op from the user's
-// perspective) and on null (no code was ever submitted).
 function showRedeemBanner() {
   if (!pendingRedeemStatus) return;
   const { status } = pendingRedeemStatus;
@@ -233,18 +178,10 @@ function showRedeemBanner() {
   banner.appendChild(span);
   banner.appendChild(btn);
   screen.insertBefore(banner, screen.firstChild);
-
-  // One-shot — consume the pending status.
   pendingRedeemStatus = null;
 }
 
-// ─── Consent gate (Phase D, 2026-04-21) ────────────────────────────
-// Checks whether the current user has an affirmative consent row in
-// public.consent_events for the current CONSENT_VERSION. Returns true
-// iff a matching row exists. Fails CLOSED on any error (returns false)
-// so we err on the side of showing the consent screen rather than
-// silently admitting an un-consented user — the record_consent RPC is
-// idempotent, so an accidental re-ack is harmless.
+// ─── Consent gate (Phase D) ────────────────────────────────────────────────
 async function hasConsented(userId) {
   if (!userId) return false;
   try {
@@ -255,10 +192,7 @@ async function hasConsented(userId) {
       .in('event_type', ['initial_consent', 'reacknowledged'])
       .eq('consent_text_shown', CONSENT_VERSION)
       .limit(1);
-    if (error) {
-      console.warn('[consent] check failed:', error.message);
-      return false;
-    }
+    if (error) { console.warn('[consent] check failed:', error.message); return false; }
     return Array.isArray(data) && data.length > 0;
   } catch (e) {
     console.warn('[consent] check threw:', e?.message || e);
@@ -266,59 +200,48 @@ async function hasConsented(userId) {
   }
 }
 
-// Click handler for the "I agree and continue" button on #consent-screen.
-// Calls the SECURITY DEFINER RPC which writes the row server-side (reads
-// auth.uid() from the JWT, so the client can't impersonate). On success
-// (status 'ok' OR 'already_recorded' — both mean we now have a row) we
-// advance to the normal startUserSession() flow. Anything else is shown
-// inline with retry allowed.
 async function handleConsentAcknowledge() {
-  const btn = document.getElementById('consent-accept-btn');
-  const errorEl = document.getElementById('consent-error');
+  const btn       = document.getElementById('consent-accept-btn');
+  const errorEl   = document.getElementById('consent-error');
   const declineBtn = document.getElementById('consent-decline-btn');
-  const screen = document.getElementById('consent-screen');
+  const screen    = document.getElementById('consent-screen');
   const versionFromDom = screen?.dataset?.consentVersion || CONSENT_VERSION;
 
-  if (errorEl) errorEl.textContent = '';
-  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  if (errorEl)    errorEl.textContent = '';
+  if (btn)        { btn.disabled = true; btn.textContent = 'Saving\u2026'; }
   if (declineBtn) declineBtn.disabled = true;
 
-  let status = null;
+  let status   = null;
   let rpcThrew = false;
 
   try {
     const { data, error } = await supabaseClient.rpc('record_consent', {
-      event_type_input: 'initial_consent',
+      event_type_input:     'initial_consent',
       consent_version_input: versionFromDom,
-      user_agent_input: (navigator.userAgent || '').slice(0, 1000),
+      user_agent_input:     (navigator.userAgent || '').slice(0, 1000),
     });
     if (error) throw error;
-    if (Array.isArray(data) && data.length > 0) {
-      status = data[0].status;
-    }
+    if (Array.isArray(data) && data.length > 0) status = data[0].status;
   } catch (e) {
     rpcThrew = true;
     console.error('[consent] RPC threw:', e?.message || e);
     logSignupError('consent_record', {
-      email: currentUser?.email,
-      message: e?.message,
-      code: e?.code,
+      email:    currentUser?.email,
+      message:  e?.message,
+      code:     e?.code,
       metadata: { consent_version: versionFromDom, stage: 'rpc_threw' }
     });
   }
 
-  // 'ok' = newly recorded; 'already_recorded' = same version already on
-  // file (idempotent re-ack). Both mean we can proceed.
   if (!rpcThrew && (status === 'ok' || status === 'already_recorded')) {
     await startUserSession();
     return;
   }
 
-  // Any other outcome: show error, re-enable buttons, let the user retry.
   if (!rpcThrew && status) {
     logSignupError('consent_record', {
-      email: currentUser?.email,
-      message: `Consent RPC returned status: ${status}`,
+      email:    currentUser?.email,
+      message:  `Consent RPC returned status: ${status}`,
       metadata: { consent_version: versionFromDom, status }
     });
   }
@@ -328,74 +251,51 @@ async function handleConsentAcknowledge() {
       ? 'Something went wrong saving your acknowledgement. Please try again in a moment.'
       : 'We couldn\u2019t save your acknowledgement. Please try again.';
   }
-  if (btn) { btn.disabled = false; btn.textContent = 'I agree and continue'; }
+  if (btn)        { btn.disabled = false; btn.textContent = 'I agree and continue'; }
   if (declineBtn) declineBtn.disabled = false;
 }
 
-// Click handler for the "I don't agree" link on #consent-screen.
-// Signs the user out and returns them to auth-screen. We deliberately do
-// NOT write a 'withdrawn' row to consent_events here — the user never
-// consented in the first place, so there's nothing to withdraw from. If
-// they ever want to use Tether in the future, they'll just see the
-// consent screen again after signing in.
 async function handleConsentDecline() {
-  const btn = document.getElementById('consent-decline-btn');
+  const btn       = document.getElementById('consent-decline-btn');
   const acceptBtn = document.getElementById('consent-accept-btn');
-  if (btn) btn.disabled = true;
+  if (btn)       btn.disabled = true;
   if (acceptBtn) acceptBtn.disabled = true;
 
-  try {
-    await signOut();
-  } catch (e) {
+  try { await signOut(); } catch (e) {
     console.warn('[consent] sign-out on decline failed:', e?.message || e);
   }
 
-  // Reset in-memory state and drop back to auth-screen. onAuthStateChange
-  // will also fire SIGNED_OUT which would do the same thing, but we do it
-  // explicitly here so there's no visual limbo if the event is delayed.
-  currentUser = null;
-  appShown = false;
-  pendingRedeemStatus = null;
+  currentUser           = null;
+  appShown              = false;
+  pendingRedeemStatus   = null;
   showScreen('auth-screen');
 
-  if (btn) btn.disabled = false;
+  if (btn)       btn.disabled = false;
   if (acceptBtn) acceptBtn.disabled = false;
 }
 
-// ─── Corporate Email Detection ─────────────────────────────────────
-// Phase B: HARD BLOCK. Work emails disable the submit button and show an
-// error-style message. The privacy promise is the whole product — we do not
-// allow employer-visible email addresses into the user base.
+// ─── Corporate Email Detection ─────────────────────────────────────────────
 function checkCorporateEmail(value) {
   const warningEl = document.getElementById('corp-email-warning');
-  const btn = document.getElementById('magic-btn');
-  const errorEl = document.getElementById('auth-error');
+  const btn       = document.getElementById('magic-btn');
+  const errorEl   = document.getElementById('auth-error');
 
   if (!warningEl || !btn) return;
 
-  // Not enough typed yet to decide — neutral state.
   if (!value || !value.includes('@')) {
     warningEl.style.display = 'none';
-    // Only re-enable if we're not in cooldown from a prior send.
-    if (!magicLinkCooldownTimer) {
-      btn.disabled = false;
-    }
+    if (!magicLinkCooldownTimer) btn.disabled = false;
     if (errorEl) errorEl.textContent = '';
     return;
   }
 
   const domainPart = value.split('@')[1];
-  // Domain still being typed (e.g. "x@" or "x@gm") — don't judge yet.
   if (!domainPart || !domainPart.includes('.')) {
     warningEl.style.display = 'none';
     if (!magicLinkCooldownTimer) btn.disabled = false;
     return;
   }
 
-  // isAllowedEmail covers personal-email domains AND the explicit ADMIN_EMAILS
-  // allowlist (auth.js), so internal admin accounts on custom domains
-  // (e.g. john@guidetoself.com) don't get the orange "use personal email"
-  // warning and don't have the submit button disabled.
   if (isAllowedEmail(value)) {
     warningEl.style.display = 'none';
     if (!magicLinkCooldownTimer) btn.disabled = false;
@@ -406,129 +306,97 @@ function checkCorporateEmail(value) {
   }
 }
 
-// ─── Magic Link Send ───────────────────────────────────────────────
+// ─── Magic Link Send ───────────────────────────────────────────────────────
 async function handleMagicLink() {
-  const emailInput = document.getElementById('magic-email');
-  const nameInput = document.getElementById('magic-name');
-  const codeInput = document.getElementById('magic-signup-code');
-  const btn = document.getElementById('magic-btn');
-  const errorEl = document.getElementById('auth-error');
-  const email = emailInput.value.trim().toLowerCase();
+  const emailInput   = document.getElementById('magic-email');
+  const nameInput    = document.getElementById('magic-name');
+  const codeInput    = document.getElementById('magic-signup-code');
+  const btn          = document.getElementById('magic-btn');
+  const errorEl      = document.getElementById('auth-error');
+  const email        = emailInput.value.trim().toLowerCase();
   const preferredName = nameInput.value.trim();
-  // Phase C: optional company signup code. Blank is fine — redemption is
-  // only attempted post-sign-in when this value made it into auth metadata.
-  const signupCode = codeInput ? codeInput.value.trim() : '';
+  const signupCode   = codeInput ? codeInput.value.trim() : '';
 
-  // Basic format check
   if (!email || !email.includes('@') || !email.includes('.')) {
     errorEl.textContent = 'Please enter a valid email address.';
     return;
   }
 
-  // Phase B HARD BLOCK: work email refused at submit time, not just warned.
-  // Defense in depth — the button is already disabled by checkCorporateEmail
-  // when a work email is detected, but if that UI state is bypassed we still
-  // refuse here and log the attempt.
-  // isAllowedEmail bypasses the block for the explicit ADMIN_EMAILS allowlist
-  // in auth.js (Tether-internal admin accounts on custom domains).
   if (!isAllowedEmail(email)) {
     errorEl.textContent =
       "Please use a personal email (Gmail, Yahoo, iCloud, Outlook, etc.) to sign up. " +
-      "Work emails aren't accepted — this keeps your conversations fully separate from your employer.";
+      "Work emails aren't accepted \u2014 this keeps your conversations fully separate from your employer.";
     logSignupError('work_email_blocked', {
       email,
-      message: 'Work email submission rejected by client-side block',
+      message:  'Work email submission rejected by client-side block',
       metadata: { domain: email.split('@')[1] }
     });
     return;
   }
 
-  // Store name locally as a belt-and-suspenders fallback (if user opens the
-  // link in the same browser, we'll pick this up in enterApp). The primary
-  // path is options.data → raw_user_meta_data, which survives cross-device.
-  if (preferredName) {
-    localStorage.setItem('tether_preferred_name', preferredName);
-  }
+  if (preferredName) localStorage.setItem('tether_preferred_name', preferredName);
 
-  errorEl.textContent = '';
-  btn.disabled = true;
-  btn.textContent = 'Sending link...';
+  errorEl.textContent  = '';
+  btn.disabled         = true;
+  btn.textContent      = 'Sending link...';
 
   try {
     await sendMagicLink(email, preferredName, signupCode);
-
-    // Success: show check-your-email state + arm the cooldown.
-    document.getElementById('magic-form').style.display = 'none';
+    document.getElementById('magic-form').style.display  = 'none';
     document.getElementById('check-email').style.display = 'block';
     document.getElementById('sent-email-display').textContent = email;
     armMagicLinkCooldown();
-
   } catch (err) {
     const { friendly, code, isRateLimit } = classifyAuthError(err);
     errorEl.textContent = friendly;
-
-    logSignupError('magic_link_send', {
-      email,
-      code,
-      message: err?.message,
-      metadata: { isRateLimit }
-    });
-
-    // On rate-limit, also arm the cooldown so the user doesn't immediately
-    // retry and make it worse. On other errors, re-enable the button so they
-    // can fix and retry.
+    logSignupError('magic_link_send', { email, code, message: err?.message, metadata: { isRateLimit } });
     if (isRateLimit) {
       armMagicLinkCooldown();
     } else {
-      btn.disabled = false;
+      btn.disabled    = false;
       btn.textContent = 'Send me a login link';
     }
   }
 }
 
-// ─── Cooldown management for the "Send me a login link" button ────
 function armMagicLinkCooldown() {
   const btn = document.getElementById('magic-btn');
   if (!btn) return;
   btn.disabled = true;
-
   const startedAt = Date.now();
   if (magicLinkCooldownTimer) clearInterval(magicLinkCooldownTimer);
-
   const tick = () => {
     const remainingMs = MAGIC_LINK_COOLDOWN_MS - (Date.now() - startedAt);
     if (remainingMs <= 0) {
       clearInterval(magicLinkCooldownTimer);
       magicLinkCooldownTimer = null;
-      btn.disabled = false;
+      btn.disabled    = false;
       btn.textContent = 'Send me a login link';
       return;
     }
-    const s = Math.ceil(remainingMs / 1000);
-    btn.textContent = `Check your email (resend in ${s}s)`;
+    btn.textContent = `Check your email (resend in ${Math.ceil(remainingMs / 1000)}s)`;
   };
   tick();
   magicLinkCooldownTimer = setInterval(tick, 1000);
 }
 
 function resetMagicForm() {
-  document.getElementById('magic-form').style.display = 'block';
+  document.getElementById('magic-form').style.display  = 'block';
   document.getElementById('check-email').style.display = 'none';
-  document.getElementById('auth-error').textContent = '';
+  document.getElementById('auth-error').textContent    = '';
   const warning = document.getElementById('corp-email-warning');
   if (warning) warning.style.display = 'none';
-  document.getElementById('magic-name').value = '';
-  document.getElementById('magic-email').value = '';
+  document.getElementById('magic-name').value   = '';
+  document.getElementById('magic-email').value  = '';
   const codeInput = document.getElementById('magic-signup-code');
   if (codeInput) codeInput.value = '';
   document.getElementById('magic-name').focus();
-  // Note: we deliberately do NOT clear the cooldown here — the rate limit
-  // still applies to the prior email. If the user enters a different email,
-  // the button will re-enable once the cooldown expires.
 }
 
 async function handleSignOut() {
-  if (typeof conversationHistory !== 'undefined' && conversationHistory.length > 0) await endSession(currentUser.id);
+  if (typeof conversationHistory !== 'undefined' && conversationHistory.length > 0) {
+    await endSession(currentUser.id);
+  }
   appShown = false;
   await signOut();
 }
@@ -536,23 +404,179 @@ async function handleSignOut() {
 async function startUserSession() {
   const name = currentUser.user_metadata?.preferred_name || currentUser.email?.split('@')[0];
   if (name) {
-    document.getElementById('user-greeting').textContent = `Hi ${name} — your session is private`;
-    // Personalize the big welcome card on chat-screen too (mirrors subtitle pattern above).
-    // Fallback copy in the HTML remains for users with no known name.
+    document.getElementById('user-greeting').textContent = `Hi ${name} \u2014 your session is private`;
     const welcomeStrong = document.getElementById('welcome-greeting');
-    if (welcomeStrong) {
-      welcomeStrong.textContent = `Hi ${name} — I'm Tether, your resilience coach.`;
-    }
+    if (welcomeStrong) welcomeStrong.textContent = `Hi ${name} \u2014 I'm Tether, your resilience coach.`;
   }
+
+  // Phase F: reset per-session prompt counter
+  if (typeof resetSessionPromptCount === 'function') resetSessionPromptCount();
+
+  // Phase F: initialise trial status bar (hidden until first trial response arrives)
+  const statusBar = document.getElementById('trial-status-bar');
+  if (statusBar) {
+    // Will become visible once the first chat response includes trial_status
+    statusBar.style.display = 'none';
+  }
+
   await initSession(currentUser.id);
   showScreen('adkar-screen');
-  // Phase C: render the signup-code redemption banner AFTER the adkar
-  // screen is visible so the DOM insertion takes effect. No-op if no
-  // code was submitted (pendingRedeemStatus is null).
   showRedeemBanner();
 }
 
-// ─── ADKAR ─────────────────────────────────────────────────────────
+// ─── Phase F: Trial UI helpers ─────────────────────────────────────────────
+
+// Called by coaching.js after every successful chat that includes trial_status.
+function updateTrialStatusBar(trialStatus) {
+  const bar     = document.getElementById('trial-status-bar');
+  const textEl  = document.getElementById('trial-status-text');
+  if (!bar || !textEl || !trialStatus) return;
+
+  const remaining = trialStatus.prompts_remaining;
+  const used      = trialStatus.prompts_used;
+  const startedAt = trialStatus.started_at;
+
+  // Days remaining
+  let daysText = '';
+  if (startedAt) {
+    const expiryMs  = new Date(startedAt).getTime() + 14 * 86_400_000;
+    const daysLeft  = Math.ceil((expiryMs - Date.now()) / 86_400_000);
+    if (daysLeft > 0) daysText = ` \u00b7 ${daysLeft}d left`;
+  }
+
+  textEl.textContent = `Free trial \u00b7 ${remaining} prompt${remaining !== 1 ? 's' : ''} remaining${daysText}`;
+
+  // Colour shifts as limit approaches
+  if (remaining <= 5) {
+    bar.className = 'trial-status-bar trial-status-bar--urgent';
+  } else if (remaining <= 15) {
+    bar.className = 'trial-status-bar trial-status-bar--warning';
+  } else {
+    bar.className = 'trial-status-bar';
+  }
+
+  bar.style.display = 'flex';
+}
+
+// Called by coaching.js when the worker returns 403 trial_expired.
+// Also called directly after the last prompt (prompts_remaining === 0).
+function handleTrialExpired(reason) {
+  trialEndReason = reason || 'prompts_exhausted';
+  showTrialEndedScreen(trialEndReason);
+}
+
+// Transitions to the trial-ended screen and pre-fills the pilot interest form.
+function showTrialEndedScreen(reason) {
+  // Guard against double-call: the last-prompt 1500ms timeout path and a
+  // subsequent 403 from the worker can both call this in quick succession.
+  // If the screen is already active the form fields must not be wiped again
+  // (user may have started filling them in).
+  if (document.getElementById('trial-ended-screen')?.classList.contains('active')) return;
+
+  trialEndReason = reason || 'prompts_exhausted';
+
+  // Pre-fill form fields from current user
+  if (currentUser) {
+    const nameEl    = document.getElementById('pilot-name');
+    const emailEl   = document.getElementById('pilot-email');
+    const metaName  = currentUser.user_metadata?.preferred_name || '';
+    if (nameEl)  nameEl.value  = metaName;
+    if (emailEl) emailEl.value = currentUser.email || '';
+  }
+
+  // Adjust heading copy based on reason
+  const reasonEl = document.getElementById('trial-end-reason');
+  if (reasonEl) {
+    if (reason === 'time_limit') {
+      reasonEl.textContent = 'Your 14-day free trial has ended.';
+    } else {
+      reasonEl.textContent = 'You\u2019ve used all 60 prompts in your free trial.';
+    }
+  }
+
+  showScreen('trial-ended-screen');
+}
+
+// Advisory banner shown inside chat when session hits 20 prompts.
+// Suggests ending the session (not a hard block — user can keep going
+// until the total 60-prompt server cap is enforced).
+function showSessionLimitBanner() {
+  // Only show once per session
+  if (document.getElementById('session-limit-banner')) return;
+
+  const messages = document.getElementById('messages');
+  if (!messages) return;
+
+  const banner = document.createElement('div');
+  banner.id = 'session-limit-banner';
+  banner.style.cssText =
+    'background:#f7f5f0;border:1px solid var(--sand);border-radius:10px;' +
+    'padding:14px 16px;margin:8px 0;font-size:13px;color:var(--plum);' +
+    'line-height:1.55;text-align:center;';
+  banner.innerHTML =
+    'You\u2019ve reached 20 prompts in this session \u2014 a natural stopping point. ' +
+    'When you\u2019re ready, click <strong>End Session</strong> to save your progress and ' +
+    'start fresh. You have ' +
+    (typeof getTrialStatus === 'function' && getTrialStatus()
+      ? `${getTrialStatus().prompts_remaining} trial prompts remaining overall.`
+      : 'additional trial prompts remaining.') +
+    '';
+  messages.appendChild(banner);
+  messages.scrollTop = messages.scrollHeight;
+}
+
+// ─── Phase F: Pilot study interest form ───────────────────────────────────
+async function handlePilotInterestSubmit() {
+  const btn     = document.getElementById('pilot-submit-btn');
+  const errorEl = document.getElementById('pilot-error');
+  const nameEl  = document.getElementById('pilot-name');
+  const emailEl = document.getElementById('pilot-email');
+  const coEl    = document.getElementById('pilot-company');
+  const notesEl = document.getElementById('pilot-notes');
+
+  if (errorEl) errorEl.textContent = '';
+  if (btn)     { btn.disabled = true; btn.textContent = 'Registering\u2026'; }
+
+  // currentUser must be set — if somehow it's not (e.g. session dropped
+  // at the same moment the trial ended) surface a friendly error rather
+  // than a silent RLS rejection from Supabase.
+  if (!currentUser) {
+    if (errorEl) errorEl.textContent = 'Your session has expired. Please sign out and sign back in.';
+    if (btn)     { btn.disabled = false; btn.textContent = 'Register Interest'; }
+    return;
+  }
+
+  try {
+    const trialStatus = typeof getTrialStatus === 'function' ? getTrialStatus() : null;
+
+    const { error } = await supabaseClient
+      .from('pilot_study_interest')
+      .insert({
+        user_id:       currentUser?.id || null,
+        email:         emailEl?.value?.trim() || currentUser?.email || '',
+        preferred_name: nameEl?.value?.trim() || null,
+        company:       coEl?.value?.trim()    || null,
+        notes:         notesEl?.value?.trim() || null,
+        prompts_used:  trialStatus?.prompts_used ?? null,
+        trial_reason:  trialEndReason || 'prompts_exhausted'
+      });
+
+    if (error) throw error;
+
+    // Show success state
+    const form        = document.getElementById('pilot-interest-form');
+    const successMsg  = document.getElementById('pilot-interest-success');
+    if (form)       form.style.display = 'none';
+    if (successMsg) successMsg.style.display = 'block';
+
+  } catch (e) {
+    console.error('[pilot-interest] submit failed:', e?.message || e);
+    if (errorEl) errorEl.textContent = 'Something went wrong. Please try again in a moment, or reach out to your HR or L&D team for assistance.';
+    if (btn)     { btn.disabled = false; btn.textContent = 'Register Interest'; }
+  }
+}
+
+// ─── ADKAR ─────────────────────────────────────────────────────────────────
 function setScore(stage, score) {
   adkarScores[stage] = score;
   document.querySelectorAll(`#scale-${stage} button`).forEach((btn, i) => {
@@ -561,36 +585,53 @@ function setScore(stage, score) {
 }
 async function submitAdkar() {
   const required = ['awareness','desire','knowledge','ability','reinforcement'];
-  const missing = required.filter(s => !adkarScores[s]);
-  if (missing.length > 0) { document.getElementById(`scale-${missing[0]}`).scrollIntoView({ behavior: 'smooth' }); return; }
+  const missing  = required.filter(s => !adkarScores[s]);
+  if (missing.length > 0) {
+    document.getElementById(`scale-${missing[0]}`).scrollIntoView({ behavior: 'smooth' });
+    return;
+  }
   const changeContext = document.getElementById('adkar-context-select').value;
   try {
     await saveAdkarScores(currentUser.id, adkarScores, changeContext);
   } catch (e) {
     logSignupError('adkar_submit', {
-      message: e?.message, code: e?.code,
-      email: currentUser?.email, metadata: { change_context: changeContext }
+      message:  e?.message,
+      code:     e?.code,
+      email:    currentUser?.email,
+      metadata: { change_context: changeContext }
     });
   }
   showScreen('chat-screen');
 }
 function skipAdkar() { showScreen('chat-screen'); }
 
-// ─── Chat ──────────────────────────────────────────────────────────
+// ─── Chat ──────────────────────────────────────────────────────────────────
 async function handleSend() {
-  const input = document.getElementById('chat-input');
+  const input   = document.getElementById('chat-input');
   const message = input.value.trim();
   if (!message) return;
-  input.value = ''; input.style.height = 'auto';
+  input.value = '';
+  input.style.height = 'auto';
   document.getElementById('send-btn').disabled = true;
+
   addMessage('user', message);
   showTyping(true);
+
   const response = await sendMessage(message);
+
   showTyping(false);
+
+  // Empty string is the sentinel from coaching.js when trial has expired.
+  // coaching.js has already queued showTrialEndedScreen via setTimeout — keep
+  // the send button disabled and bail out so the screen transition happens
+  // cleanly without the input re-enabling first.
+  if (!response) return;
+
   addMessage('assistant', response);
   document.getElementById('send-btn').disabled = false;
   input.focus();
 }
+
 function handleKeyDown(event) {
   if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); handleSend(); }
 }
@@ -602,10 +643,14 @@ async function handleEndSession() {
   if (confirm('End this session? Tether will save a summary to remember your progress.')) {
     await endSession(currentUser.id);
     adkarScores = {};
-    document.getElementById('messages').innerHTML = `<div class="welcome-msg"><strong>Session saved.</strong> Your progress has been noted. Come back whenever you need.</div>`;
+    document.getElementById('messages').innerHTML =
+      `<div class="welcome-msg"><strong>Session saved.</strong> Your progress has been noted. Come back whenever you need.</div>`;
+    // Phase F: reset session prompt counter for the next session
+    if (typeof resetSessionPromptCount === 'function') resetSessionPromptCount();
     showScreen('adkar-screen');
   }
 }
+
 function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
@@ -615,14 +660,14 @@ function formatCoachText(text) {
   return escapeHtml(text).replace(/\n\n/g, '<br><br>').replace(/\n/g, '<br>');
 }
 function addMessage(role, content) {
-  const messages = document.getElementById('messages');
-  const welcome = messages.querySelector('.welcome-msg');
+  const messages  = document.getElementById('messages');
+  const welcome   = messages.querySelector('.welcome-msg');
   if (welcome) welcome.remove();
-  const div = document.createElement('div');
-  div.className = `message ${role}`;
-  const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const div       = document.createElement('div');
+  div.className   = `message ${role}`;
+  const time      = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const safeContent = role === 'user' ? escapeHtml(content) : formatCoachText(content);
-  div.innerHTML = `<div class="message-bubble">${safeContent}</div><div class="message-time">${time}</div>`;
+  div.innerHTML   = `<div class="message-bubble">${safeContent}</div><div class="message-time">${time}</div>`;
   messages.appendChild(div);
   messages.scrollTop = messages.scrollHeight;
 }
@@ -631,9 +676,6 @@ function showTyping(visible) {
   document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
 }
 function showScreen(id) {
-  // Drop the magic-link callback suppression once we're transitioning to a
-  // real screen — normal .screen.active visibility takes over from here.
-  // Safe to call even when the class isn't present (no-op).
   document.documentElement.classList.remove('auth-callback');
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
