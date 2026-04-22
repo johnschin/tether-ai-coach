@@ -10,36 +10,6 @@
 <title>Tether AI Coach</title>
 <link rel="manifest" href="manifest.json">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
-<script>
-  // ─── Magic-link callback flicker suppressor ────────────────────────
-  // Detected at parse-time so it runs BEFORE the body renders. Without
-  // this, users clicking a magic link see ~1-2s of auth-screen before
-  // supabase-js parses the URL hash, captures the session, and our
-  // SIGNED_IN handler switches to adkar-screen. We instead show a
-  // minimal "Signing you in…" screen during that window.
-  //
-  // Magic links land at this URL with either:
-  //   #access_token=...         (implicit flow — current default)
-  //   ?code=...                 (PKCE flow — if we ever switch)
-  //
-  // Safety net: if the session never establishes within 10s (expired link,
-  // network failure, etc.), we drop the class so the regular auth-screen
-  // shows again — auth-screen still has `active` from initial render, so
-  // removing the suppression naturally reveals it.
-  (function() {
-    try {
-      var hash = window.location.hash || '';
-      var search = window.location.search || '';
-      var isCallback = /access_token=/.test(hash) || /[?&]code=/.test(search);
-      if (isCallback) {
-        document.documentElement.classList.add('auth-callback');
-        window.setTimeout(function() {
-          document.documentElement.classList.remove('auth-callback');
-        }, 10000);
-      }
-    } catch (e) { /* never block render */ }
-  })();
-</script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -52,7 +22,7 @@
   body { font-family: 'DM Sans', sans-serif; background: var(--cream); color: var(--plum); height: 100vh; height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
   .screen { display: none; flex-direction: column; height: 100vh; height: 100dvh; }
   .screen.active { display: flex; }
-  #auth-screen { justify-content: center; align-items: center; padding: 32px 24px; background: linear-gradient(135deg, var(--cream) 0%, var(--sand) 100%); }
+  #auth-screen { justify-content: flex-start; align-items: center; padding: 32px 24px; padding-top: 60px; overflow-y: auto; background: linear-gradient(135deg, var(--cream) 0%, var(--sand) 100%); }
   .auth-logo { text-align: center; margin-bottom: 40px; }
   .auth-logo h1 { font-family: 'Playfair Display', serif; font-size: 36px; font-weight: 600; color: var(--plum); letter-spacing: -0.5px; }
   .auth-logo h1 span { color: var(--teal); }
@@ -62,8 +32,6 @@
   .auth-privacy-box p { font-size: 13px; color: var(--plum); line-height: 1.55; }
   .auth-privacy-box strong { color: var(--plum); font-weight: 600; }
   .corp-email-warning { display: none; background: #fff8f0; border: 1px solid #f0d8b5; border-radius: 8px; padding: 10px 12px; margin-top: 8px; font-size: 12px; color: #8a6d3b; line-height: 1.5; text-align: left; }
-  .form-hint { font-size: 11px; color: var(--muted); margin-top: 6px; line-height: 1.5; text-align: left; }
-  .label-optional { font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--muted); margin-left: 4px; font-size: 11px; }
   .check-email-section { display: none; text-align: center; }
   .check-email-icon { width: 56px; height: 56px; background: #eef6f5; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 16px; }
   .check-email-icon svg { width: 28px; height: 28px; stroke: var(--teal); fill: none; }
@@ -81,7 +49,7 @@
   .auth-btn:hover { opacity: 0.9; }
   .auth-btn:disabled { opacity: 0.4; cursor: not-allowed; }
   .auth-privacy { font-size: 11px; color: var(--muted); text-align: center; margin-top: 20px; line-height: 1.6; }
-  .auth-error { font-size: 12px; color: #d32f2f; margin-top: 12px; text-align: center; min-height: 18px; line-height: 1.5; }
+  .auth-error { font-size: 12px; color: #d32f2f; margin-top: 12px; text-align: center; min-height: 18px; }
   #adkar-screen { background: var(--cream); padding: 48px 24px 32px; overflow-y: auto; }
   .adkar-header { margin-bottom: 32px; }
   .adkar-header h2 { font-family: 'Playfair Display', serif; font-size: 24px; font-weight: 600; color: #1a1a1a; margin-bottom: 8px; }
@@ -129,24 +97,9 @@
   .send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
   .welcome-msg { text-align: center; padding: 32px 16px; color: var(--muted); font-size: 13px; line-height: 1.7; }
   .welcome-msg strong { display: block; font-family: 'Playfair Display', serif; font-size: 18px; color: var(--plum); font-weight: 400; margin-bottom: 8px; }
-  /* Magic-link callback loading screen — see head-script flicker suppressor. */
-  #loading-screen { justify-content: center; align-items: center; padding: 32px 24px; background: linear-gradient(135deg, var(--cream) 0%, var(--sand) 100%); }
-  .loading-content { text-align: center; }
-  .loading-spinner { width: 36px; height: 36px; margin: 0 auto 18px; border: 3px solid var(--sand); border-top-color: var(--plum); border-radius: 50%; animation: loadingSpin 0.8s linear infinite; }
-  @keyframes loadingSpin { to { transform: rotate(360deg); } }
-  .loading-text { font-family: 'Playfair Display', serif; font-size: 18px; color: var(--plum); letter-spacing: 0.2px; }
-  html.auth-callback #auth-screen { display: none !important; }
-  html.auth-callback #loading-screen { display: flex !important; }
 </style>
 </head>
 <body>
-
-<div id="loading-screen" class="screen">
-  <div class="loading-content">
-    <div class="loading-spinner"></div>
-    <div class="loading-text">Signing you in&hellip;</div>
-  </div>
-</div>
 
 <div id="auth-screen" class="screen active">
   <div class="auth-logo">
@@ -157,7 +110,7 @@
     <!-- Magic Link Form -->
     <div id="magic-form">
       <div class="auth-privacy-box">
-        <p>&#128274; Your conversations are private. <strong>Please use a personal email</strong> (Gmail, Yahoo, iCloud, Outlook, etc.) &mdash; work emails aren't accepted so your employer never has access to what you share here. Your company only receives anonymous, aggregate insights. After you enter your first name and personal email, a login link will be sent to you. Click that link to start &mdash; you can use it anytime to return.</p>
+        <p>&#128274; Your conversations are private. Use a <strong>personal email</strong> so your employer never has access to what you share here. Your company only receives anonymous, aggregate insights. Upon submitting your first name and personal email, an email will be sent to you from Supabase. This email contains additional instructions and a link which you can always use to return and use Tether AI.</p>
       </div>
       <div class="form-group">
         <label>How would you like to be addressed?</label>
@@ -169,15 +122,8 @@
           oninput="checkCorporateEmail(this.value)"
           onkeydown="if(event.key==='Enter'){event.preventDefault();handleMagicLink();}">
         <div class="corp-email-warning" id="corp-email-warning">
-          <strong>Please use a personal email.</strong> Work emails aren't accepted here &mdash; this is how we keep your conversations fully separate from your employer. Try Gmail, Yahoo, iCloud, Outlook, or another personal provider.
+          This looks like a work email. For your privacy, we recommend using a personal email (Gmail, Yahoo, iCloud, etc.) so your employer cannot access your conversations.
         </div>
-      </div>
-      <div class="form-group">
-        <label>Company Code<span class="label-optional">(optional)</span></label>
-        <input type="text" id="magic-signup-code" placeholder="e.g. GILEAD-PILOT" autocomplete="off"
-          maxlength="64"
-          onkeydown="if(event.key==='Enter'){event.preventDefault();handleMagicLink();}">
-        <div class="form-hint">If your employer gave you an access code, enter it here. Leave blank otherwise.</div>
       </div>
       <button class="auth-btn" id="magic-btn" onclick="handleMagicLink()">Send me a login link</button>
     </div>
@@ -191,7 +137,7 @@
         </svg>
       </div>
       <h3>Check your email</h3>
-      <p>We sent a login link to <strong id="sent-email-display"></strong>.<br>Click the link in that email to start your session. It can take up to a minute to arrive &mdash; please check spam if you don't see it.</p>
+      <p>We sent a login link to <strong id="sent-email-display"></strong>.<br>Click the link in that email to start your session.</p>
       <p style="font-size:12px;">Didn't get it? Check spam, or <button class="auth-link-btn" onclick="resetMagicForm()">try a different email</button></p>
     </div>
 
@@ -284,7 +230,7 @@
   </div>
   <div class="messages" id="messages">
     <div class="welcome-msg">
-      <strong id="welcome-greeting">Hi — I'm Tether, your resilience coach.</strong>
+      <strong>Hi — I'm Tether, your resilience coach.</strong>
       I'm here to help you navigate whatever's shifting at work right now. What's on your mind?
     </div>
   </div>
