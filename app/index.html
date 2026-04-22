@@ -10,6 +10,37 @@
 <title>Tether AI Coach</title>
 <link rel="manifest" href="manifest.json">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script>
+  // ─── Magic-link callback flicker suppressor ────────────────────────
+  // Detected at parse-time so it runs BEFORE the body renders. Without
+  // this, users clicking a magic link see ~1-2s of auth-screen before
+  // supabase-js parses the URL hash, captures the session, and our
+  // SIGNED_IN handler switches to adkar-screen (or consent-screen for
+  // first-time users). We instead show a minimal "Signing you in…"
+  // screen during that window.
+  //
+  // Magic links land at this URL with either:
+  //   #access_token=...         (implicit flow — current default)
+  //   ?code=...                 (PKCE flow — if we ever switch)
+  //
+  // Safety net: if the session never establishes within 10s (expired link,
+  // network failure, etc.), we drop the class so the regular auth-screen
+  // shows again — auth-screen still has `active` from initial render, so
+  // removing the suppression naturally reveals it.
+  (function() {
+    try {
+      var hash = window.location.hash || '';
+      var search = window.location.search || '';
+      var isCallback = /access_token=/.test(hash) || /[?&]code=/.test(search);
+      if (isCallback) {
+        document.documentElement.classList.add('auth-callback');
+        window.setTimeout(function() {
+          document.documentElement.classList.remove('auth-callback');
+        }, 10000);
+      }
+    } catch (e) { /* never block render */ }
+  })();
+</script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -22,7 +53,7 @@
   body { font-family: 'DM Sans', sans-serif; background: var(--cream); color: var(--plum); height: 100vh; height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
   .screen { display: none; flex-direction: column; height: 100vh; height: 100dvh; }
   .screen.active { display: flex; }
-  #auth-screen { justify-content: flex-start; align-items: center; padding: 32px 24px; padding-top: 60px; overflow-y: auto; background: linear-gradient(135deg, var(--cream) 0%, var(--sand) 100%); }
+  #auth-screen { justify-content: center; align-items: center; padding: 32px 24px; background: linear-gradient(135deg, var(--cream) 0%, var(--sand) 100%); }
   .auth-logo { text-align: center; margin-bottom: 40px; }
   .auth-logo h1 { font-family: 'Playfair Display', serif; font-size: 36px; font-weight: 600; color: var(--plum); letter-spacing: -0.5px; }
   .auth-logo h1 span { color: var(--teal); }
@@ -32,6 +63,8 @@
   .auth-privacy-box p { font-size: 13px; color: var(--plum); line-height: 1.55; }
   .auth-privacy-box strong { color: var(--plum); font-weight: 600; }
   .corp-email-warning { display: none; background: #fff8f0; border: 1px solid #f0d8b5; border-radius: 8px; padding: 10px 12px; margin-top: 8px; font-size: 12px; color: #8a6d3b; line-height: 1.5; text-align: left; }
+  .form-hint { font-size: 11px; color: var(--muted); margin-top: 6px; line-height: 1.5; text-align: left; }
+  .label-optional { font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--muted); margin-left: 4px; font-size: 11px; }
   .check-email-section { display: none; text-align: center; }
   .check-email-icon { width: 56px; height: 56px; background: #eef6f5; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 16px; }
   .check-email-icon svg { width: 28px; height: 28px; stroke: var(--teal); fill: none; }
@@ -49,7 +82,30 @@
   .auth-btn:hover { opacity: 0.9; }
   .auth-btn:disabled { opacity: 0.4; cursor: not-allowed; }
   .auth-privacy { font-size: 11px; color: var(--muted); text-align: center; margin-top: 20px; line-height: 1.6; }
-  .auth-error { font-size: 12px; color: #d32f2f; margin-top: 12px; text-align: center; min-height: 18px; }
+  .auth-error { font-size: 12px; color: #d32f2f; margin-top: 12px; text-align: center; min-height: 18px; line-height: 1.5; }
+
+  /* ─── Consent screen (Phase D, 2026-04-21) ────────────────────────
+     Gated entry point: a first-time signed-in user sees this before
+     the ADKAR screen. app.js.hasConsented() decides whether to show
+     it. Shares the auth-screen gradient so the transition from
+     loading-screen feels continuous. */
+  #consent-screen { justify-content: flex-start; align-items: center; padding: 32px 20px; background: linear-gradient(135deg, var(--cream) 0%, var(--sand) 100%); overflow-y: auto; }
+  .consent-card { background: #ffffff; border: 1px solid var(--sand); border-radius: 16px; padding: 28px 24px; width: 100%; max-width: 520px; box-shadow: 0 12px 48px rgba(78,74,85,0.12); margin: 24px auto; }
+  .consent-header { text-align: center; margin-bottom: 20px; }
+  .consent-header h2 { font-family: 'Playfair Display', serif; font-size: 24px; font-weight: 600; color: var(--plum); letter-spacing: -0.3px; margin-bottom: 8px; }
+  .consent-header p { font-size: 13px; color: var(--muted); line-height: 1.55; }
+  .consent-body { background: #f7f5f0; border: 1px solid var(--sand); border-radius: 10px; padding: 18px 18px; margin-bottom: 20px; text-align: left; max-height: 48vh; overflow-y: auto; }
+  .consent-body h4 { font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600; color: var(--plum); margin: 14px 0 6px 0; letter-spacing: 0.2px; }
+  .consent-body h4:first-child { margin-top: 0; }
+  .consent-body p { font-size: 13px; color: var(--plum); line-height: 1.6; margin-bottom: 4px; }
+  .consent-body strong { font-weight: 600; color: var(--plum); }
+  .consent-body a { color: var(--plum); text-decoration: underline; }
+  .consent-fine-print { font-size: 11px; color: var(--muted); line-height: 1.55; margin-top: 14px; text-align: center; }
+  .consent-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+  .consent-decline { background: none; border: none; font-family: 'DM Sans', sans-serif; font-size: 12px; color: var(--muted); cursor: pointer; text-decoration: underline; padding: 8px; text-align: center; }
+  .consent-decline:hover { color: var(--plum); }
+  .consent-error { font-size: 12px; color: #d32f2f; margin-top: 8px; text-align: center; min-height: 18px; line-height: 1.5; }
+
   #adkar-screen { background: var(--cream); padding: 48px 24px 32px; overflow-y: auto; }
   .adkar-header { margin-bottom: 32px; }
   .adkar-header h2 { font-family: 'Playfair Display', serif; font-size: 24px; font-weight: 600; color: #1a1a1a; margin-bottom: 8px; }
@@ -97,9 +153,24 @@
   .send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
   .welcome-msg { text-align: center; padding: 32px 16px; color: var(--muted); font-size: 13px; line-height: 1.7; }
   .welcome-msg strong { display: block; font-family: 'Playfair Display', serif; font-size: 18px; color: var(--plum); font-weight: 400; margin-bottom: 8px; }
+  /* Magic-link callback loading screen — see head-script flicker suppressor. */
+  #loading-screen { justify-content: center; align-items: center; padding: 32px 24px; background: linear-gradient(135deg, var(--cream) 0%, var(--sand) 100%); }
+  .loading-content { text-align: center; }
+  .loading-spinner { width: 36px; height: 36px; margin: 0 auto 18px; border: 3px solid var(--sand); border-top-color: var(--plum); border-radius: 50%; animation: loadingSpin 0.8s linear infinite; }
+  @keyframes loadingSpin { to { transform: rotate(360deg); } }
+  .loading-text { font-family: 'Playfair Display', serif; font-size: 18px; color: var(--plum); letter-spacing: 0.2px; }
+  html.auth-callback #auth-screen { display: none !important; }
+  html.auth-callback #loading-screen { display: flex !important; }
 </style>
 </head>
 <body>
+
+<div id="loading-screen" class="screen">
+  <div class="loading-content">
+    <div class="loading-spinner"></div>
+    <div class="loading-text">Signing you in&hellip;</div>
+  </div>
+</div>
 
 <div id="auth-screen" class="screen active">
   <div class="auth-logo">
@@ -110,7 +181,7 @@
     <!-- Magic Link Form -->
     <div id="magic-form">
       <div class="auth-privacy-box">
-        <p>&#128274; Your conversations are private. Use a <strong>personal email</strong> so your employer never has access to what you share here. Your company only receives anonymous, aggregate insights. Upon submitting your first name and personal email, an email will be sent to you from Supabase. This email contains additional instructions and a link which you can always use to return and use Tether AI.</p>
+        <p>&#128274; Your conversations are private. <strong>Please use a personal email</strong> (Gmail, Yahoo, iCloud, Outlook, etc.) &mdash; work emails aren't accepted so your employer never has access to what you share here. Your company only receives anonymous, aggregate insights. After you enter your first name and personal email, a login link will be sent to you. Click that link to start &mdash; you can use it anytime to return.</p>
       </div>
       <div class="form-group">
         <label>How would you like to be addressed?</label>
@@ -122,8 +193,15 @@
           oninput="checkCorporateEmail(this.value)"
           onkeydown="if(event.key==='Enter'){event.preventDefault();handleMagicLink();}">
         <div class="corp-email-warning" id="corp-email-warning">
-          This looks like a work email. For your privacy, we recommend using a personal email (Gmail, Yahoo, iCloud, etc.) so your employer cannot access your conversations.
+          <strong>Please use a personal email.</strong> Work emails aren't accepted here &mdash; this is how we keep your conversations fully separate from your employer. Try Gmail, Yahoo, iCloud, Outlook, or another personal provider.
         </div>
+      </div>
+      <div class="form-group">
+        <label>Company Code<span class="label-optional">(optional)</span></label>
+        <input type="text" id="magic-signup-code" placeholder="e.g. GILEAD-PILOT" autocomplete="off"
+          maxlength="64"
+          onkeydown="if(event.key==='Enter'){event.preventDefault();handleMagicLink();}">
+        <div class="form-hint">If your employer gave you an access code, enter it here. Leave blank otherwise.</div>
       </div>
       <button class="auth-btn" id="magic-btn" onclick="handleMagicLink()">Send me a login link</button>
     </div>
@@ -137,12 +215,50 @@
         </svg>
       </div>
       <h3>Check your email</h3>
-      <p>We sent a login link to <strong id="sent-email-display"></strong>.<br>Click the link in that email to start your session.</p>
+      <p>We sent a login link to <strong id="sent-email-display"></strong>.<br>Click the link in that email to start your session. It can take up to a minute to arrive &mdash; please check spam if you don't see it.</p>
       <p style="font-size:12px;">Didn't get it? Check spam, or <button class="auth-link-btn" onclick="resetMagicForm()">try a different email</button></p>
     </div>
 
     <div class="auth-error" id="auth-error"></div>
     <p class="auth-privacy">Your conversations are completely private.<br>Your employer cannot see your sessions. Ever.</p>
+  </div>
+</div>
+
+<!-- Phase D (2026-04-21): Consent screen. Gated by app.js.hasConsented() —
+     shown on first sign-in, skipped on every return after acknowledgement.
+     The data-consent-version attribute is the single source of truth; app.js
+     reads it and passes it to record_consent() so the DB row is attributable
+     to exactly the text shown. Bump this string AND the visible copy in
+     lockstep whenever consent language changes. -->
+<div id="consent-screen" class="screen" data-consent-version="tether-v1-2026-04">
+  <div class="consent-card">
+    <div class="consent-header">
+      <h2>Before we begin</h2>
+      <p>A quick read so you know what Tether is &mdash; and what it isn't.</p>
+    </div>
+
+    <div class="consent-body">
+      <h4>Tether is coaching, not therapy.</h4>
+      <p>Tether is an educational coaching tool for building resilience, communication skills, and self-leadership through workplace change. It is <strong>not therapy, counseling, medical care, crisis support, or a substitute for a licensed mental health professional</strong>. If you're in crisis or thinking about harming yourself or someone else, please contact your EAP, HR, or call or text <strong>988</strong> (U.S. Suicide &amp; Crisis Lifeline).</p>
+
+      <h4>Your conversations are private from your employer.</h4>
+      <p>Your chat messages, check-in responses, and session summaries are stored on Supabase (US-East) so you can return to them. Your employer only ever sees <strong>anonymized, aggregated insights</strong> &mdash; never your individual conversations, name, or email &mdash; and only when at least <strong>5 employees</strong> have contributed data. You can request deletion of your data at any time by emailing the address provided by your company.</p>
+
+      <h4>Some topics are out of scope.</h4>
+      <p>If you bring up self-harm, suicidal thoughts, abuse, harm to others, diagnosable conditions, or active crisis, Tether will acknowledge what you're sharing and redirect you to a professional resource. Tether does not diagnose, prescribe, treat, or intervene in a crisis.</p>
+
+      <h4>How your data is used.</h4>
+      <p>Your data is used only to (a) deliver your coaching experience, (b) generate the anonymized, aggregate insights your company's HR or L&amp;D team sees, and (c) improve the product. We do <strong>not</strong> sell your data, share it with advertisers, or use it to train third-party AI models.</p>
+    </div>
+
+    <div class="consent-actions">
+      <button class="auth-btn" id="consent-accept-btn" onclick="handleConsentAcknowledge()">I agree and continue</button>
+      <button class="consent-decline" id="consent-decline-btn" onclick="handleConsentDecline()">I don't agree &mdash; sign me out</button>
+    </div>
+
+    <div class="consent-error" id="consent-error"></div>
+
+    <p class="consent-fine-print">By continuing, you confirm you're using Tether voluntarily and you're at least 18 years old.</p>
   </div>
 </div>
 
@@ -230,7 +346,7 @@
   </div>
   <div class="messages" id="messages">
     <div class="welcome-msg">
-      <strong>Hi — I'm Tether, your resilience coach.</strong>
+      <strong id="welcome-greeting">Hi — I'm Tether, your resilience coach.</strong>
       I'm here to help you navigate whatever's shifting at work right now. What's on your mind?
     </div>
   </div>
