@@ -470,9 +470,21 @@
   }
   .trend-row {
     display: grid;
-    grid-template-columns: 110px 1fr;
+    grid-template-columns: 110px 28px 1fr;
     align-items: center;
     gap: 12px;
+  }
+  .y-axis {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    height: 32px;
+    font-family: var(--mono);
+    font-size: 8px;
+    color: var(--ink-dim);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
   }
   .trend-label {
     font-family: var(--mono);
@@ -997,7 +1009,9 @@ const SUPABASE_ANON_KEY = `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
           const h = Math.round((v / max) * 100);
           return `<div class="spark-bar ${s.color}" style="height:${Math.max(h, 4)}%"></div>`;
         }).join('');
-        html += `<div class="trend-row"><div class="trend-label">${s.label}</div><div class="sparkline">${bars}</div></div>`;
+        const yTop = max.toFixed(1);
+        const yBot = visibleAvgs.length ? Math.min(...visibleAvgs).toFixed(1) : '0';
+        html += `<div class="trend-row"><div class="trend-label">${s.label}</div><div class="y-axis"><span>${yTop}</span><span>${yBot}</span></div><div class="sparkline">${bars}</div></div>`;
       });
       html += `<div class="privacy-floor-msg" style="margin-top:10px;font-size:9px;">Weeks with fewer than ${PRIVACY_FLOOR} assessments shown as empty to protect privacy.</div>`;
       document.getElementById('trendPanel').innerHTML = html;
@@ -1039,6 +1053,7 @@ const SUPABASE_ANON_KEY = `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
       document.getElementById('engagementPanel').innerHTML = `
         <div class="trend-row">
           <div class="trend-label">Sessions / Week</div>
+          <div class="y-axis"><span>${max}</span><span>0</span></div>
           <div class="sparkline">${bars}</div>
         </div>
         <div class="privacy-floor-msg" style="margin-top:10px;font-size:9px;">Weeks with fewer than ${PRIVACY_FLOOR} sessions shown as empty to protect privacy.</div>`;
