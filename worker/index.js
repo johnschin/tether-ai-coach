@@ -1,32 +1,25 @@
-// ─── Tether AI Coach — Cloudflare Worker (HARDENED v2, ES256) ───────────────
+// ─── Tether AI Coach — Cloudflare Worker (Phase E: Company-Gated Access) ─────
 // Destination in repo: tether-ai-coach/worker/index.js
 //
-// Changes from prior version (JWT hardening, Phase 1):
-//   1. Every application endpoint now requires a valid Supabase session JWT
-//      in the Authorization header (`Bearer <access_token>`).
-//   2. userId is sourced from the JWT's `sub` claim — NEVER from the request
-//      body. Any body-supplied userId is IGNORED. This closes the gap where
-//      anyone with a UUID could read/write another user's data.
-//   3. 401 on missing/malformed/expired/invalid-signature tokens.
+// Changes from live baseline (worker_index_live_2026-04-22.js):
 //
-// Note on signing algorithm:
-//   This Supabase project uses ASYMMETRIC signing (ES256 / ECDSA P-256),
-//   verified via the project's JWKS endpoint at:
-//     {SUPABASE_URL}/auth/v1/.well-known/jwks.json
-//   There is NO shared JWT secret for this project — the worker fetches
-//   the public keys at runtime and caches them in memory. jose's
-//   createRemoteJWKSet handles the fetch + cache + on-demand refresh.
+//   Phase E — Company-gated endpoint access (2026-04-22):
+//   After JWT verification passes, all four application endpoints now check
+//   whether the user's company pilot window is currently open. Access is
+//   denied with 403 + a human-readable message if:
+//     - company.active = false  (company manually deactivated by admin)
+//     - pilot_start is in the future  (program not yet open)
+//     - pilot_end is in the past  (program concluded)
+//   Users with no company_id (admins, unassigned accounts) always pass through.
 //
-// Required env vars (unchanged from prior deploy):
-//   - TETHER_ALLOWED_ORIGIN
-//   - ANTHROPIC_API_KEY
-//   - SUPABASE_URL          ← also used to construct the JWKS URL
-//   - SUPABASE_SERVICE_KEY
-//   (No new secrets needed — JWKS is a public endpoint.)
+//   Fail-open policy: if either Supabase fetch inside checkPilotAccess fails
+//   (network timeout, transient error), the request is allowed through rather
+//   than hard-blocking users on infrastructure issues.
 //
-// New npm dependency:
-//   - jose  (standard JOSE library for Workers)
-//     Install with: `cd worker && npm install jose`
+//   No new env vars required. Reads from existing companies + user_profiles
+//   tables via SUPABASE_SERVICE_KEY (already in use by the other handlers).
+//
+// Deploy: cd worker && npm run deploy  (or: wrangler deploy)
 
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 
@@ -36,10 +29,6 @@ const CORS_HEADERS = {
 };
 
 // ─── JWKS cache ─────────────────────────────────────────────────────────────
-// Module-level cache. createRemoteJWKSet returns a resolver function that
-// internally caches fetched JWKs and refreshes them on demand (default 30min
-// cache, automatic refresh if a new kid is seen). We only need to build this
-// once per worker isolate — subsequent requests reuse the same resolver.
 let _jwks = null;
 function getJWKS(supabaseUrl) {
   if (!_jwks) {
@@ -50,10 +39,8 @@ function getJWKS(supabaseUrl) {
   return _jwks;
 }
 
-// ─── Auth helper ────────────────────────────────────────────────────────────
-// Verifies the Supabase session JWT from the Authorization header.
-// Returns { userId, email, claims } on success, or { error, status } on failure.
-// Never logs the token. Never echoes the raw jose error to the client.
+// ─── Gate 1: JWT verification ────────────────────────────────────────────────
+// Returns { userId, email, claims } on success, { error, status } on failure.
 async function verifyAuth(request, env) {
   const authHeader = request.headers.get('Authorization');
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -63,21 +50,12 @@ async function verifyAuth(request, env) {
   if (!token) {
     return { error: 'Empty bearer token', status: 401 };
   }
-
-  // Fail closed if SUPABASE_URL isn't configured — we can't build the JWKS URL.
   if (!env.SUPABASE_URL) {
     console.error('[auth] SUPABASE_URL is not configured');
     return { error: 'Server not configured for authentication', status: 500 };
   }
-
   try {
     const JWKS = getJWKS(env.SUPABASE_URL);
-    // Supabase access tokens (this project, asymmetric signing):
-    //   alg: ES256 (ECDSA with P-256 curve)
-    //   aud: "authenticated" (for signed-in users)
-    //   iss: <SUPABASE_URL>/auth/v1
-    //   sub: <user UUID>
-    //   exp: epoch seconds — jose enforces this automatically
     const { payload } = await jwtVerify(token, JWKS, {
       audience: 'authenticated',
       algorithms: ['ES256']
@@ -91,23 +69,108 @@ async function verifyAuth(request, env) {
       claims: payload
     };
   } catch (e) {
-    // Common causes: ERR_JWT_EXPIRED, ERR_JWT_CLAIM_VALIDATION_FAILED,
-    // ERR_JWS_SIGNATURE_VERIFICATION_FAILED, ERR_JWS_INVALID,
-    // ERR_JWKS_NO_MATCHING_KEY (token signed with a kid we haven't cached yet
-    // — jose auto-refreshes and retries, so a sustained failure here means
-    // something is genuinely wrong).
-    // Log the code/name server-side for debugging; return vague error to client.
     console.warn('[auth] JWT verification failed:', e.code || e.name || e.message);
     return { error: 'Invalid or expired token', status: 401 };
   }
 }
 
-// ─── Entry point ────────────────────────────────────────────────────────────
+// ─── Gate 2: Company pilot window ────────────────────────────────────────────
+// Returns null (access granted) or { error, status, message } (access denied).
+//
+// Access rules (evaluated in order):
+//   1. No company_id on user_profiles → allow (admins, unassigned users)
+//   2. company.active = false → 403 pilot_inactive
+//   3. pilot_start in the future → 403 pilot_not_started
+//   4. pilot_end in the past → 403 pilot_concluded
+//   5. All checks pass → allow
+//
+// Fail-open: any Supabase fetch failure (non-200, network error, parse error)
+// lets the request through. We prefer a coaching session for a post-pilot user
+// over locking out a valid user due to a transient DB hiccup.
+async function checkPilotAccess(userId, env) {
+  try {
+    // Step 1: get the user's company_id from user_profiles
+    const profileRes = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/user_profiles?id=eq.${userId}&select=company_id`,
+      {
+        headers: {
+          'apikey': env.SUPABASE_SERVICE_KEY,
+          'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`
+        }
+      }
+    );
+    if (!profileRes.ok) {
+      console.warn('[pilot] profile fetch failed (%d), allowing through', profileRes.status);
+      return null;
+    }
+    const profiles = await profileRes.json();
+    const companyId = profiles[0]?.company_id;
+
+    // Admins and unassigned users (company_id = null) always pass through.
+    if (!companyId) return null;
+
+    // Step 2: fetch the company's pilot window
+    const companyRes = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/companies?id=eq.${companyId}&select=active,pilot_start,pilot_end`,
+      {
+        headers: {
+          'apikey': env.SUPABASE_SERVICE_KEY,
+          'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`
+        }
+      }
+    );
+    if (!companyRes.ok) {
+      console.warn('[pilot] company fetch failed (%d), allowing through', companyRes.status);
+      return null;
+    }
+    const companies = await companyRes.json();
+    const company = companies[0];
+
+    // No company row found — shouldn't happen, allow through rather than block.
+    if (!company) return null;
+
+    // Step 3: evaluate access rules
+    if (company.active === false) {
+      return {
+        error: 'pilot_inactive',
+        status: 403,
+        message: "Your organization's access to Tether is not currently active. Please contact your HR or L&D team for more information."
+      };
+    }
+
+    const now = new Date();
+
+    if (company.pilot_start && new Date(company.pilot_start) > now) {
+      return {
+        error: 'pilot_not_started',
+        status: 403,
+        message: "Your organization's Tether pilot hasn't begun yet. Please check back on your program start date."
+      };
+    }
+
+    if (company.pilot_end && new Date(company.pilot_end) < now) {
+      return {
+        error: 'pilot_concluded',
+        status: 403,
+        message: "Your organization's Tether pilot has concluded. Thank you for participating. Please reach out to your HR or L&D team if you have questions about continued access."
+      };
+    }
+
+    return null; // All checks pass — access granted
+
+  } catch (err) {
+    // Unexpected error (network timeout, JSON parse failure, etc.)
+    // Fail open so infrastructure hiccups don't lock out users.
+    console.error('[pilot] checkPilotAccess threw, allowing through:', err.message);
+    return null;
+  }
+}
+
+// ─── Entry point ─────────────────────────────────────────────────────────────
 export default {
   async fetch(request, env) {
     const corsOrigin = env.TETHER_ALLOWED_ORIGIN || '*';
 
-    // CORS preflight — never requires auth.
     if (request.method === 'OPTIONS') {
       return new Response(null, {
         headers: {
@@ -124,13 +187,22 @@ export default {
 
     const { pathname } = new URL(request.url);
 
-    // All application endpoints require a valid Supabase session JWT.
-    // We gate here (before route dispatch) so no handler can forget to check.
+    // Gate 1: valid Supabase session JWT required for all application endpoints.
     const auth = await verifyAuth(request, env);
     if (auth.error) {
       return new Response(
         JSON.stringify({ error: auth.error }),
         { status: auth.status, headers: corsHeader }
+      );
+    }
+
+    // Gate 2: company pilot window must be currently open.
+    // Returns null (allow) or { error, status, message } (deny with 403).
+    const pilotCheck = await checkPilotAccess(auth.userId, env);
+    if (pilotCheck) {
+      return new Response(
+        JSON.stringify({ error: pilotCheck.error, message: pilotCheck.message }),
+        { status: pilotCheck.status, headers: corsHeader }
       );
     }
 
@@ -153,7 +225,7 @@ export default {
   }
 };
 
-// ─── /chat ──────────────────────────────────────────────────────────────────
+// ─── /chat ───────────────────────────────────────────────────────────────────
 async function handleChat(request, env, corsHeader, auth) {
   const { messages, memoryContext } = await request.json();
   const systemPrompt = buildSystemPrompt(memoryContext);
@@ -176,10 +248,8 @@ async function handleChat(request, env, corsHeader, auth) {
   return new Response(JSON.stringify(data), { headers: corsHeader });
 }
 
-// ─── /get-memory ────────────────────────────────────────────────────────────
+// ─── /get-memory ─────────────────────────────────────────────────────────────
 async function handleGetMemory(request, env, corsHeader, auth) {
-  // SECURITY: userId comes from the verified JWT — NOT from the request body.
-  // Any body-supplied userId is ignored. This is the core of the hardening.
   const userId = auth.userId;
 
   const summariesRes = await fetch(
@@ -215,9 +285,6 @@ async function handleGetMemory(request, env, corsHeader, auth) {
   );
   const adkar = await adkarRes.json();
 
-  // Preferred name lives on user_profiles (populated by the on_auth_user_created
-  // trigger from raw_user_meta_data at signup, and by enterApp() belt-and-suspenders
-  // upsert). NULL for users who signed up before Phase B or never entered a name.
   const profileNameRes = await fetch(
     `${env.SUPABASE_URL}/rest/v1/user_profiles?id=eq.${userId}&select=preferred_name`,
     {
@@ -237,9 +304,8 @@ async function handleGetMemory(request, env, corsHeader, auth) {
   );
 }
 
-// ─── /save-summary ──────────────────────────────────────────────────────────
+// ─── /save-summary ────────────────────────────────────────────────────────────
 async function handleSaveSummary(request, env, corsHeader, auth) {
-  // SECURITY: userId from JWT. Body-supplied userId is ignored.
   const { conversation } = await request.json();
   const userId = auth.userId;
 
@@ -312,9 +378,8 @@ ${conversation}`
   );
 }
 
-// ─── /adkar ─────────────────────────────────────────────────────────────────
+// ─── /adkar ──────────────────────────────────────────────────────────────────
 async function handleAdkar(request, env, corsHeader, auth) {
-  // SECURITY: userId from JWT. Body-supplied userId is ignored.
   const { scores, changeContext } = await request.json();
   const userId = auth.userId;
 
@@ -353,11 +418,7 @@ async function handleAdkar(request, env, corsHeader, auth) {
   );
 }
 
-// ─── Memory context ─────────────────────────────────────────────────────────
-// Builds the context block prepended to the system prompt. Includes the
-// employee's preferred name (when known) and any prior-session coaching
-// history. Either is enough to produce a non-empty context — a first-time
-// user with a known name still gets a personalized greeting.
+// ─── Memory context ───────────────────────────────────────────────────────────
 function buildMemoryContext(summaries, profile, adkar, preferredName) {
   const hasHistory = !!(summaries?.length || profile || adkar);
   if (!hasHistory && !preferredName) return '';
@@ -404,20 +465,20 @@ function buildMemoryContext(summaries, profile, adkar, preferredName) {
   return context;
 }
 
-// ─── System prompt (unchanged) ──────────────────────────────────────────────
+// ─── System prompt ────────────────────────────────────────────────────────────
 function buildSystemPrompt(memoryContext) {
-  return `You are Tether, an AI psychological resilience coach for employees in corporate environments. You are warm, direct, and psychologically sophisticated — not a cheerleader, not a therapist.
+  return `You are Tether, an AI psychological resilience coach for employees in corporate environments. You are warm, direct, and psychologically sophisticated \u2014 not a cheerleader, not a therapist.
 
 IDENTITY
 - You are a coaching tool, not a clinical service
-- You provide psychoeducational coaching only — never diagnosis, never clinical treatment
+- You provide psychoeducational coaching only \u2014 never diagnosis, never clinical treatment
 - You are available 24/7, completely private, and judgment-free
 - Employees can trust that nothing they share is visible to their employer
 
 CORE COACHING AREAS
 You are equipped to coach on:
 - Job insecurity and existential workplace stress
-- Layoff survivor syndrome — guilt, grief, re-engagement
+- Layoff survivor syndrome \u2014 guilt, grief, re-engagement
 - AI anxiety and professional identity disruption
 - Emotional regulation under workplace pressure
 - Burnout recognition and recovery
@@ -447,32 +508,32 @@ Employees have an internal leadership system:
 - The Protector: the defensive part that activates under threat
 - The Emotional Core: the part that carries hurt, fear, grief, anxiety
 
-Under stress, the Protector takes over and the CEO goes offline. Your coaching goal is always to help the employee access their CEO — their grounded, capable self.
+Under stress, the Protector takes over and the CEO goes offline. Your coaching goal is always to help the employee access their CEO \u2014 their grounded, capable self.
 
-CRISIS PROTOCOL — FOLLOW EXACTLY
-Tier 1 — Normal coaching: stress, uncertainty, burnout, conflict → coach normally
-Tier 2 — Soft escalation: hopelessness, feeling trapped, prolonged despair →
-  Say: "What you are describing sounds heavier than typical work stress. I want to make sure you have real human support alongside our work together. Your company EAP is a confidential resource — I would encourage you to reach out to them."
-Tier 3 — Hard escalation: any mention of self-harm, suicidal thoughts →
+CRISIS PROTOCOL \u2014 FOLLOW EXACTLY
+Tier 1 \u2014 Normal coaching: stress, uncertainty, burnout, conflict \u2192 coach normally
+Tier 2 \u2014 Soft escalation: hopelessness, feeling trapped, prolonged despair \u2192
+  Say: "What you are describing sounds heavier than typical work stress. I want to make sure you have real human support alongside our work together. Your company EAP is a confidential resource \u2014 I would encourage you to reach out to them."
+Tier 3 \u2014 Hard escalation: any mention of self-harm, suicidal thoughts \u2192
   Say: "I am concerned about your safety right now. Please contact the 988 Suicide and Crisis Lifeline by calling or texting 988. If you are in immediate danger, call 911."
 
 TONE AND STYLE
-- Direct and warm — not clinical, not corporate
+- Direct and warm \u2014 not clinical, not corporate
 - Ask one question at a time
-- Short responses over long ones — this is a conversation, not a lecture
+- Short responses over long ones \u2014 this is a conversation, not a lecture
 - Never toxic positivity
 - Never minimize legitimate workplace grievances
 
 FORMATTING RULES
-- Never use asterisks (*) in your responses — no bold, no italic, no bullet markers using asterisks
-- Never use hashtags (#) in your responses — no markdown headers
+- Never use asterisks (*) in your responses \u2014 no bold, no italic, no bullet markers using asterisks
+- Never use hashtags (#) in your responses \u2014 no markdown headers
 - Use plain, clean text. Use dashes (-) for lists if needed. Emphasize through word choice and sentence structure, not formatting symbols.
 
 GREETING RULES
 - Only say "Welcome back" when the user is returning (i.e., they have prior session history or memory context)
-- For first-time users, use a fresh introduction like: "Hi — I'm Tether, your resilience coach. I'm here to help you navigate whatever's shifting at work right now. What's on your mind?"
+- For first-time users, use a fresh introduction like: "Hi \u2014 I'm Tether, your resilience coach. I'm here to help you navigate whatever's shifting at work right now. What's on your mind?"
 - Do not assume a user has been here before unless session memory confirms it
-- If an EMPLOYEE PREFERRED NAME appears in the context below, address the user by that name in your opening line (e.g., "Hi John — I'm Tether..." for new users, or "Welcome back, John." for returning users). Use only the name provided — never invent or guess one. If no name is provided, do not use a name.
+- If an EMPLOYEE PREFERRED NAME appears in the context below, address the user by that name in your opening line (e.g., "Hi John \u2014 I'm Tether..." for new users, or "Welcome back, John." for returning users). Use only the name provided \u2014 never invent or guess one. If no name is provided, do not use a name.
 
 ${memoryContext ? `\n${memoryContext}` : ''}`;
 }
