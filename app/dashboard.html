@@ -286,6 +286,13 @@
     padding: 3px 8px;
     font-weight: 600;
   }
+  .panel-desc {
+    padding: 12px 24px;
+    font-size: 12px;
+    color: var(--ink-dim);
+    border-bottom: 1px solid var(--border);
+    line-height: 1.55;
+  }
   .panel-body { padding: 24px; }
   /* ── ADKAR BARS ────────────────────────────────────────── */
   .adkar-row {
@@ -634,6 +641,9 @@
           <div class="panel-title">ADKAR Trend — 8 Weeks</div>
           <div class="panel-tag">Aggregate Score</div>
         </div>
+        <div class="panel-desc">
+          Tracks the average total ADKAR score across all employees week over week. Rising bars indicate growing change readiness across your workforce. Flat or declining bars signal where targeted support may be needed.
+        </div>
         <div class="panel-body">
           <div class="trend-wrap" id="trendPanel">
             <div style="color:var(--ink-dim);font-family:var(--mono);font-size:11px;">Loading...</div>
@@ -644,6 +654,9 @@
         <div class="panel-header">
           <div class="panel-title">Session Engagement</div>
           <div class="panel-tag">Weekly Sessions — 8 Weeks</div>
+        </div>
+        <div class="panel-desc">
+          Shows how many coaching sessions employees completed each week. Sustained or growing engagement indicates the program is being adopted. A drop-off may signal a need for re-engagement outreach from your L&amp;D team.
         </div>
         <div class="panel-body">
           <div id="engagementPanel">
