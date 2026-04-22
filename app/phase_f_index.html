@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Tether">
+<title>Tether AI Coach</title>
+<link rel="manifest" href="manifest.json">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script>
+  // ─── Magic-link callback flicker suppressor ───────────────────────────────
+  (function() {
+    try {
+      var hash   = window.location.hash   || '';
+      var search = window.location.search || '';
+      var isCallback = /access_token=/.test(hash) || /[?&]code=/.test(search);
+      if (isCallback) {
+        document.documentElement.classList.add('auth-callback');
+        window.setTimeout(function() {
+          document.documentElement.classList.remove('auth-callback');
+        }, 10000);
+      }
+    } catch (e) { /* never block render */ }
+  })();
+</script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --ink: #4e4a55; --slate: #5e5a65; --tether: #afc9cf;
+    --tether-light: #bfdcdc; --white: #ffffff;
+    --plum: #4e4a55; --plum-light: #5e5a65; --teal: #afc9cf;
+    --sage: #bfdcdc; --mauve: #998193; --sand: #ded3cc;
+    --cream: #f0ebe2; --muted: #8a8590;
+  }
+  body { font-family: 'DM Sans', sans-serif; background: var(--cream); color: var(--plum); height: 100vh; height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
+  .screen { display: none; flex-direction: column; height: 100vh; height: 100dvh; }
+  .screen.active { display: flex; }
+
+  /* ─── Auth screen ──────────────────────────────────────────────────────── */
+  #auth-screen { justify-content: center; align-items: center; padding: 32px 24px; background: linear-gradient(135deg, var(--cream) 0%, var(--sand) 100%); }
+  .auth-logo { text-align: center; margin-bottom: 40px; }
+  .auth-logo h1 { font-family: 'Playfair Display', serif; font-size: 36px; font-weight: 600; color: var(--plum); letter-spacing: -0.5px; }
+  .auth-logo h1 span { color: var(--teal); }
+  .auth-logo p { font-size: 13px; color: var(--muted); margin-top: 8px; letter-spacing: 1.5px; text-transform: uppercase; }
+  .auth-card { background: #ffffff; border: 1px solid var(--sand); border-radius: 16px; padding: 32px 28px; width: 100%; max-width: 380px; box-shadow: 0 12px 48px rgba(78,74,85,0.12); }
+  .auth-privacy-box { background: #f7f5f0; border: 1px solid var(--sand); border-radius: 10px; padding: 14px 16px; margin-bottom: 24px; text-align: left; }
+  .auth-privacy-box p { font-size: 13px; color: var(--plum); line-height: 1.55; }
+  .auth-privacy-box strong { color: var(--plum); font-weight: 600; }
+  .corp-email-warning { display: none; background: #fff8f0; border: 1px solid #f0d8b5; border-radius: 8px; padding: 10px 12px; margin-top: 8px; font-size: 12px; color: #8a6d3b; line-height: 1.5; text-align: left; }
+  .form-hint { font-size: 11px; color: var(--muted); margin-top: 6px; line-height: 1.5; text-align: left; }
+  .label-optional { font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--muted); margin-left: 4px; font-size: 11px; }
+  .check-email-section { display: none; text-align: center; }
+  .check-email-icon { width: 56px; height: 56px; background: #eef6f5; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 16px; }
+  .check-email-icon svg { width: 28px; height: 28px; stroke: var(--teal); fill: none; }
+  .check-email-section h3 { font-family: 'Playfair Display', serif; font-size: 20px; font-weight: 600; color: var(--plum); margin-bottom: 10px; }
+  .check-email-section p { font-size: 13px; color: var(--muted); line-height: 1.55; margin-bottom: 16px; }
+  .check-email-section strong { color: var(--plum); }
+  .auth-link-btn { background: none; border: none; font-family: 'DM Sans', sans-serif; font-size: 12px; color: var(--muted); cursor: pointer; text-decoration: underline; padding: 4px; }
+  .auth-link-btn:hover { color: var(--plum); }
+  .form-group { margin-bottom: 16px; }
+  .form-group label { display: block; font-size: 12px; font-weight: 600; color: var(--plum); margin-bottom: 6px; letter-spacing: 0.5px; text-transform: uppercase; }
+  .form-group input, .form-group textarea, .form-group select { width: 100%; padding: 12px 14px; background: #fafaf8; border: 1px solid var(--sand); border-radius: 8px; color: var(--plum); font-family: 'DM Sans', sans-serif; font-size: 14px; outline: none; transition: border 0.2s; }
+  .form-group input:focus, .form-group textarea:focus { border-color: var(--teal); background: #fff; }
+  .form-group input::placeholder, .form-group textarea::placeholder { color: var(--muted); }
+  .form-group input[readonly] { background: #f0ede8; cursor: default; color: var(--muted); }
+  .form-group textarea { resize: vertical; min-height: 60px; line-height: 1.5; }
+  .auth-btn { width: 100%; padding: 14px; background: var(--plum); border: none; border-radius: 8px; color: var(--white); font-family: 'DM Sans', sans-serif; font-size: 15px; font-weight: 500; cursor: pointer; margin-top: 8px; transition: opacity 0.2s; }
+  .auth-btn:hover { opacity: 0.9; }
+  .auth-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .auth-privacy { font-size: 11px; color: var(--muted); text-align: center; margin-top: 20px; line-height: 1.6; }
+  .auth-error { font-size: 12px; color: #d32f2f; margin-top: 12px; text-align: center; min-height: 18px; line-height: 1.5; }
+
+  /* ─── Consent screen (Phase D) ─────────────────────────────────────────── */
+  #consent-screen { justify-content: flex-start; align-items: center; padding: 32px 20px; background: linear-gradient(135deg, var(--cream) 0%, var(--sand) 100%); overflow-y: auto; }
+  .consent-card { background: #ffffff; border: 1px solid var(--sand); border-radius: 16px; padding: 28px 24px; width: 100%; max-width: 520px; box-shadow: 0 12px 48px rgba(78,74,85,0.12); margin: 24px auto; }
+  .consent-header { text-align: center; margin-bottom: 20px; }
+  .consent-header h2 { font-family: 'Playfair Display', serif; font-size: 24px; font-weight: 600; color: var(--plum); letter-spacing: -0.3px; margin-bottom: 8px; }
+  .consent-header p { font-size: 13px; color: var(--muted); line-height: 1.55; }
+  .consent-body { background: #f7f5f0; border: 1px solid var(--sand); border-radius: 10px; padding: 18px 18px; margin-bottom: 20px; text-align: left; max-height: 48vh; overflow-y: auto; }
+  .consent-body h4 { font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600; color: var(--plum); margin: 14px 0 6px 0; letter-spacing: 0.2px; }
+  .consent-body h4:first-child { margin-top: 0; }
+  .consent-body p { font-size: 13px; color: var(--plum); line-height: 1.6; margin-bottom: 4px; }
+  .consent-body strong { font-weight: 600; color: var(--plum); }
+  .consent-body a { color: var(--plum); text-decoration: underline; }
+  .consent-fine-print { font-size: 11px; color: var(--muted); line-height: 1.55; margin-top: 14px; text-align: center; }
+  .consent-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+  .consent-decline { background: none; border: none; font-family: 'DM Sans', sans-serif; font-size: 12px; color: var(--muted); cursor: pointer; text-decoration: underline; padding: 8px; text-align: center; }
+  .consent-decline:hover { color: var(--plum); }
+  .consent-error { font-size: 12px; color: #d32f2f; margin-top: 8px; text-align: center; min-height: 18px; line-height: 1.5; }
+
+  /* ─── ADKAR screen ─────────────────────────────────────────────────────── */
+  #adkar-screen { background: var(--cream); padding: 48px 24px 32px; overflow-y: auto; }
+  .adkar-header { margin-bottom: 32px; }
+  .adkar-header h2 { font-family: 'Playfair Display', serif; font-size: 24px; font-weight: 600; color: #1a1a1a; margin-bottom: 8px; }
+  .adkar-header p { font-size: 13px; color: #555; line-height: 1.6; }
+  .adkar-question { margin-bottom: 28px; }
+  .adkar-question label { display: block; font-size: 14px; font-weight: 500; color: #1a1a1a; margin-bottom: 12px; line-height: 1.5; }
+  .adkar-scale { display: flex; gap: 8px; }
+  .adkar-scale button { flex: 1; padding: 12px 4px; border: 1px solid var(--sand); border-radius: 8px; background: #fff; color: #555; font-family: 'DM Sans', sans-serif; font-size: 16px; font-weight: 500; cursor: pointer; transition: all 0.2s; }
+  .adkar-scale button.selected { background: var(--plum); border-color: var(--plum); color: var(--white); }
+  .adkar-context { margin-bottom: 28px; }
+  .adkar-context label { display: block; font-size: 12px; font-weight: 500; color: #555; margin-bottom: 8px; letter-spacing: 0.5px; text-transform: uppercase; }
+  .adkar-context select { width: 100%; padding: 12px 14px; background: #fff; border: 1px solid var(--sand); border-radius: 8px; color: #1a1a1a; font-family: 'DM Sans', sans-serif; font-size: 14px; outline: none; }
+  .adkar-context select option { background: #fff; }
+  .adkar-btn { width: 100%; padding: 14px; background: var(--plum); border: none; border-radius: 8px; color: var(--white); font-family: 'DM Sans', sans-serif; font-size: 15px; font-weight: 500; cursor: pointer; margin-top: 8px; }
+  .adkar-skip { width: 100%; padding: 10px; background: transparent; border: none; color: var(--muted); font-family: 'DM Sans', sans-serif; font-size: 13px; cursor: pointer; margin-top: 8px; }
+
+  /* ─── Chat screen ──────────────────────────────────────────────────────── */
+  #chat-screen { background: var(--cream); }
+  .chat-header { background: #fff; border-bottom: 1px solid var(--sand); padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+  .chat-header-left h2 { font-family: 'Playfair Display', serif; font-size: 20px; font-weight: 600; color: #1a1a1a; }
+  .chat-header-left p { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .header-actions { display: flex; gap: 8px; }
+  .icon-btn { background: #f5f0ea; border: 1px solid var(--sand); border-radius: 8px; padding: 8px 12px; color: var(--plum); font-size: 12px; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.2s; }
+  .icon-btn:hover { background: var(--sand); color: #1a1a1a; }
+
+  /* ─── Phase F: Trial status bar ────────────────────────────────────────── */
+  /* Sits between chat-header and messages. Hidden by default; JS shows it
+     when the first trial_status arrives from the worker. */
+  .trial-status-bar {
+    display: none; /* shown by JS */
+    align-items: center;
+    justify-content: center;
+    padding: 6px 16px;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+    background: #f7f5f0;
+    border-bottom: 1px solid var(--sand);
+    color: var(--muted);
+    flex-shrink: 0;
+    gap: 6px;
+  }
+  /* Amber — < 15 prompts remaining */
+  .trial-status-bar--warning {
+    background: #fff9f0;
+    border-bottom-color: #f0d8b5;
+    color: #8a6d3b;
+  }
+  /* Brick — < 5 prompts remaining */
+  .trial-status-bar--urgent {
+    background: #fff5f5;
+    border-bottom-color: #f5c6c6;
+    color: #a15555;
+  }
+
+  .messages { flex: 1; overflow-y: auto; padding: 20px 16px; display: flex; flex-direction: column; gap: 16px; }
+  .message { display: flex; flex-direction: column; max-width: 85%; animation: fadeIn 0.3s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .message.user { align-self: flex-end; }
+  .message.assistant { align-self: flex-start; }
+  .message-bubble { padding: 12px 16px; border-radius: 16px; font-size: 14px; line-height: 1.6; font-weight: 400; }
+  .message.user .message-bubble { background: var(--plum); color: var(--white); border-bottom-right-radius: 4px; }
+  .message.assistant .message-bubble { background: var(--sage); color: #1a1a1a; border-bottom-left-radius: 4px; }
+  .message-time { font-size: 10px; color: var(--muted); margin-top: 4px; padding: 0 4px; }
+  .message.user .message-time { text-align: right; }
+  .typing-indicator { display: none; align-self: flex-start; padding: 12px 16px; background: var(--sage); border-radius: 16px; border-bottom-left-radius: 4px; margin: 0 16px; }
+  .typing-indicator.visible { display: flex; gap: 4px; align-items: center; }
+  .typing-dot { width: 6px; height: 6px; background: var(--muted); border-radius: 50%; animation: typingBounce 1.2s infinite; }
+  .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+  .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes typingBounce { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-6px); } }
+  .chat-input-area { padding: 12px 16px 24px; border-top: 1px solid var(--sand); display: flex; gap: 10px; align-items: flex-end; flex-shrink: 0; background: #fff; }
+  .chat-input { flex: 1; background: #fafaf8; border: 1px solid var(--sand); border-radius: 12px; padding: 12px 14px; color: #1a1a1a; font-family: 'DM Sans', sans-serif; font-size: 14px; outline: none; resize: none; min-height: 44px; max-height: 120px; line-height: 1.5; transition: border 0.2s; }
+  .chat-input:focus { border-color: var(--teal); }
+  .chat-input::placeholder { color: var(--muted); }
+  .send-btn { background: var(--plum); border: none; border-radius: 10px; width: 44px; height: 44px; color: var(--white); font-size: 18px; cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center; transition: opacity 0.2s; }
+  .send-btn:hover { opacity: 0.9; }
+  .send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .welcome-msg { text-align: center; padding: 32px 16px; color: var(--muted); font-size: 13px; line-height: 1.7; }
+  .welcome-msg strong { display: block; font-family: 'Playfair Display', serif; font-size: 18px; color: var(--plum); font-weight: 400; margin-bottom: 8px; }
+
+  /* ─── Loading screen ───────────────────────────────────────────────────── */
+  #loading-screen { justify-content: center; align-items: center; padding: 32px 24px; background: linear-gradient(135deg, var(--cream) 0%, var(--sand) 100%); }
+  .loading-content { text-align: center; }
+  .loading-spinner { width: 36px; height: 36px; margin: 0 auto 18px; border: 3px solid var(--sand); border-top-color: var(--plum); border-radius: 50%; animation: loadingSpin 0.8s linear infinite; }
+  @keyframes loadingSpin { to { transform: rotate(360deg); } }
+  .loading-text { font-family: 'Playfair Display', serif; font-size: 18px; color: var(--plum); letter-spacing: 0.2px; }
+  html.auth-callback #auth-screen { display: none !important; }
+  html.auth-callback #loading-screen { display: flex !important; }
+
+  /* ─── Phase F: Trial-ended screen ─────────────────────────────────────── */
+  /* Shown when the free trial is exhausted (prompts or time). Follows the
+     same design language as the auth / consent screens. */
+  #trial-ended-screen {
+    justify-content: flex-start;
+    align-items: center;
+    padding: 32px 20px 48px;
+    background: linear-gradient(135deg, var(--cream) 0%, var(--sand) 100%);
+    overflow-y: auto;
+  }
+  .trial-ended-card {
+    background: #ffffff;
+    border: 1px solid var(--sand);
+    border-radius: 16px;
+    padding: 32px 28px;
+    width: 100%;
+    max-width: 480px;
+    box-shadow: 0 12px 48px rgba(78,74,85,0.12);
+    margin: 24px auto 0;
+  }
+  .trial-ended-logo {
+    text-align: center;
+    margin-bottom: 28px;
+  }
+  .trial-ended-logo h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: 28px;
+    font-weight: 600;
+    color: var(--plum);
+    letter-spacing: -0.3px;
+  }
+  .trial-ended-logo h1 span { color: var(--teal); }
+  .trial-ended-headline {
+    font-family: 'Playfair Display', serif;
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--plum);
+    letter-spacing: -0.2px;
+    margin-bottom: 12px;
+    line-height: 1.25;
+  }
+  .trial-ended-body {
+    font-size: 14px;
+    color: var(--plum);
+    line-height: 1.65;
+    margin-bottom: 24px;
+  }
+  .trial-ended-body p + p { margin-top: 10px; }
+  .trial-ended-divider {
+    height: 1px;
+    background: var(--sand);
+    margin: 24px 0;
+  }
+  .trial-ended-cta-label {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 16px;
+  }
+  /* Pilot interest success state */
+  .pilot-interest-success {
+    display: none;
+    text-align: center;
+    padding: 20px 0 8px;
+  }
+  .pilot-interest-success .checkmark {
+    font-size: 36px;
+    color: var(--teal);
+    margin-bottom: 12px;
+    line-height: 1;
+  }
+  .pilot-interest-success p {
+    font-size: 14px;
+    color: var(--plum);
+    line-height: 1.6;
+  }
+  .trial-ended-signout {
+    width: 100%;
+    margin-top: 20px;
+    padding: 10px;
+    background: transparent;
+    border: 1px solid var(--sand);
+    border-radius: 8px;
+    color: var(--muted);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.2s;
+  }
+  .trial-ended-signout:hover { background: var(--sand); color: var(--plum); }
+</style>
+</head>
+<body>
+
+<!-- ─── Loading screen (magic-link flicker suppressor) ───────────────────── -->
+<div id="loading-screen" class="screen">
+  <div class="loading-content">
+    <div class="loading-spinner"></div>
+    <div class="loading-text">Signing you in&hellip;</div>
+  </div>
+</div>
+
+<!-- ─── Auth screen ─────────────────────────────────────────────────────── -->
+<div id="auth-screen" class="screen active">
+  <div class="auth-logo">
+    <h1>Tether<span> AI</span></h1>
+    <p>Your Private Resilience Coach</p>
+  </div>
+  <div class="auth-card">
+    <div id="magic-form">
+      <div class="auth-privacy-box">
+        <p>&#128274; Your conversations are private. <strong>Please use a personal email</strong> (Gmail, Yahoo, iCloud, Outlook, etc.) &mdash; work emails aren&rsquo;t accepted so your employer never has access to what you share here. Your company only receives anonymous, aggregate insights. After you enter your first name and personal email, a login link will be sent to you. Click that link to start &mdash; you can use it anytime to return.</p>
+      </div>
+      <div class="form-group">
+        <label>How would you like to be addressed?</label>
+        <input type="text" id="magic-name" placeholder="First name" autocomplete="given-name">
+      </div>
+      <div class="form-group">
+        <label>Personal Email</label>
+        <input type="email" id="magic-email" placeholder="you@gmail.com" autocomplete="email"
+          oninput="checkCorporateEmail(this.value)"
+          onkeydown="if(event.key==='Enter'){event.preventDefault();handleMagicLink();}">
+        <div class="corp-email-warning" id="corp-email-warning">
+          <strong>Please use a personal email.</strong> Work emails aren&rsquo;t accepted here &mdash; this is how we keep your conversations fully separate from your employer. Try Gmail, Yahoo, iCloud, Outlook, or another personal provider.
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Company Code<span class="label-optional">(optional)</span></label>
+        <input type="text" id="magic-signup-code" placeholder="e.g. GILEAD-PILOT" autocomplete="off"
+          maxlength="64"
+          onkeydown="if(event.key==='Enter'){event.preventDefault();handleMagicLink();}">
+        <div class="form-hint">If your employer gave you an access code, enter it here. Leave blank otherwise.</div>
+      </div>
+      <button class="auth-btn" id="magic-btn" onclick="handleMagicLink()">Send me a login link</button>
+      <div class="form-hint" style="text-align:center; margin-top:10px;">Switching devices? Just enter your email again to get a new sign-in link &mdash; your progress is always saved.</div>
+    </div>
+
+    <div class="check-email-section" id="check-email">
+      <div class="check-email-icon">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="4" width="20" height="16" rx="2"/>
+          <path d="M22 4L12 13L2 4"/>
+        </svg>
+      </div>
+      <h3>Check your email</h3>
+      <p>We sent a login link to <strong id="sent-email-display"></strong>.<br>Click the link in that email to start your session. It can take up to a minute to arrive &mdash; please check spam if you don&rsquo;t see it.</p>
+      <p style="font-size:12px;">Didn&rsquo;t get it? Check spam, or <button class="auth-link-btn" onclick="resetMagicForm()">try a different email</button></p>
+    </div>
+
+    <div class="auth-error" id="auth-error"></div>
+    <p class="auth-privacy">Your conversations are completely private.<br>Your employer cannot see your sessions. Ever.</p>
+  </div>
+</div>
+
+<!-- ─── Consent screen (Phase D) ────────────────────────────────────────── -->
+<div id="consent-screen" class="screen" data-consent-version="tether-v1-2026-04">
+  <div class="consent-card">
+    <div class="consent-header">
+      <h2>Before we begin</h2>
+      <p>A quick read so you know what Tether is &mdash; and what it isn&rsquo;t.</p>
+    </div>
+
+    <div class="consent-body">
+      <h4>Tether is coaching, not therapy.</h4>
+      <p>Tether is an educational coaching tool for building resilience, communication skills, and self-leadership through workplace change. It is <strong>not therapy, counseling, medical care, crisis support, or a substitute for a licensed mental health professional</strong>. If you&rsquo;re in crisis or thinking about harming yourself or someone else, please contact your EAP, HR, or call or text <strong>988</strong> (U.S. Suicide &amp; Crisis Lifeline).</p>
+
+      <h4>Your conversations are private from your employer.</h4>
+      <p>Your chat messages, check-in responses, and session summaries are stored on Supabase (US-East) so you can return to them. Your employer only ever sees <strong>anonymized, aggregated insights</strong> &mdash; never your individual conversations, name, or email &mdash; and only when at least <strong>5 employees</strong> have contributed data. You can request deletion of your data at any time by emailing the address provided by your company.</p>
+
+      <h4>Some topics are out of scope.</h4>
+      <p>If you bring up self-harm, suicidal thoughts, abuse, harm to others, diagnosable conditions, or active crisis, Tether will acknowledge what you&rsquo;re sharing and redirect you to a professional resource. Tether does not diagnose, prescribe, treat, or intervene in a crisis.</p>
+
+      <h4>How your data is used.</h4>
+      <p>Your data is used only to (a) deliver your coaching experience, (b) generate the anonymized, aggregate insights your company&rsquo;s HR or L&amp;D team sees, and (c) improve the product. We do <strong>not</strong> sell your data, share it with advertisers, or use it to train third-party AI models.</p>
+    </div>
+
+    <div class="consent-actions">
+      <button class="auth-btn" id="consent-accept-btn" onclick="handleConsentAcknowledge()">I agree and continue</button>
+      <button class="consent-decline" id="consent-decline-btn" onclick="handleConsentDecline()">I don&rsquo;t agree &mdash; sign me out</button>
+    </div>
+
+    <div class="consent-error" id="consent-error"></div>
+
+    <p class="consent-fine-print">By continuing, you confirm you&rsquo;re using Tether voluntarily and you&rsquo;re at least 18 years old.</p>
+  </div>
+</div>
+
+<!-- ─── ADKAR screen ──────────────────────────────────────────────────────── -->
+<div id="adkar-screen" class="screen">
+  <div class="adkar-header">
+    <h2>Quick Check-In</h2>
+    <p>Below is a brief survey to gather aggregated information on where and how to focus the company efforts in assisting employees in navigating current challenges. This page takes 30&ndash;60 seconds. All your answers are private. The company will receive no individual identifying information. This is why we use a personal email &mdash; to ensure your anonymity and privacy.</p>
+  </div>
+  <div class="adkar-context">
+    <label>What change are you navigating?</label>
+    <select id="adkar-context-select">
+      <option value="general">General workplace stress</option>
+      <option value="ai_rollout">AI tools rollout</option>
+      <option value="restructure">Reorganization / restructuring</option>
+      <option value="layoffs">Layoffs in my team or company</option>
+      <option value="rto">Return to office</option>
+      <option value="leadership_change">New leadership</option>
+      <option value="role_change">Role or responsibility change</option>
+    </select>
+  </div>
+  <div class="adkar-question">
+    <label>I understand <em>why</em> this change is happening.</label>
+    <div class="adkar-scale" id="scale-awareness">
+      <button onclick="setScore('awareness',1)">1</button>
+      <button onclick="setScore('awareness',2)">2</button>
+      <button onclick="setScore('awareness',3)">3</button>
+      <button onclick="setScore('awareness',4)">4</button>
+      <button onclick="setScore('awareness',5)">5</button>
+    </div>
+  </div>
+  <div class="adkar-question">
+    <label>I <em>want</em> to make this change work.</label>
+    <div class="adkar-scale" id="scale-desire">
+      <button onclick="setScore('desire',1)">1</button>
+      <button onclick="setScore('desire',2)">2</button>
+      <button onclick="setScore('desire',3)">3</button>
+      <button onclick="setScore('desire',4)">4</button>
+      <button onclick="setScore('desire',5)">5</button>
+    </div>
+  </div>
+  <div class="adkar-question">
+    <label>I know <em>how</em> to do what&rsquo;s being asked of me.</label>
+    <div class="adkar-scale" id="scale-knowledge">
+      <button onclick="setScore('knowledge',1)">1</button>
+      <button onclick="setScore('knowledge',2)">2</button>
+      <button onclick="setScore('knowledge',3)">3</button>
+      <button onclick="setScore('knowledge',4)">4</button>
+      <button onclick="setScore('knowledge',5)">5</button>
+    </div>
+  </div>
+  <div class="adkar-question">
+    <label>I can consistently <em>execute</em> the change in practice.</label>
+    <div class="adkar-scale" id="scale-ability">
+      <button onclick="setScore('ability',1)">1</button>
+      <button onclick="setScore('ability',2)">2</button>
+      <button onclick="setScore('ability',3)">3</button>
+      <button onclick="setScore('ability',4)">4</button>
+      <button onclick="setScore('ability',5)">5</button>
+    </div>
+  </div>
+  <div class="adkar-question">
+    <label>I feel like I can <em>sustain</em> this change long-term.</label>
+    <div class="adkar-scale" id="scale-reinforcement">
+      <button onclick="setScore('reinforcement',1)">1</button>
+      <button onclick="setScore('reinforcement',2)">2</button>
+      <button onclick="setScore('reinforcement',3)">3</button>
+      <button onclick="setScore('reinforcement',4)">4</button>
+      <button onclick="setScore('reinforcement',5)">5</button>
+    </div>
+  </div>
+  <button class="adkar-btn" onclick="submitAdkar()">Start Coaching Session</button>
+  <button class="adkar-skip" onclick="skipAdkar()">Skip for now</button>
+</div>
+
+<!-- ─── Chat screen ──────────────────────────────────────────────────────── -->
+<div id="chat-screen" class="screen">
+  <div class="chat-header">
+    <div class="chat-header-left">
+      <h2>Tether</h2>
+      <p id="user-greeting">Your private resilience coach</p>
+    </div>
+    <div class="header-actions">
+      <button class="icon-btn" onclick="handleEndSession()">End Session</button>
+      <button class="icon-btn" onclick="handleSignOut()">Sign Out</button>
+    </div>
+  </div>
+
+  <!-- Phase F: Trial status bar — hidden until first trial_status arrives -->
+  <div id="trial-status-bar" class="trial-status-bar" role="status" aria-live="polite">
+    <span id="trial-status-text"></span>
+  </div>
+
+  <div class="messages" id="messages">
+    <div class="welcome-msg">
+      <strong id="welcome-greeting">Hi &mdash; I&rsquo;m Tether, your resilience coach.</strong>
+      I&rsquo;m here to help you navigate whatever&rsquo;s shifting at work right now. What&rsquo;s on your mind?
+    </div>
+  </div>
+  <div class="typing-indicator" id="typing">
+    <div class="typing-dot"></div>
+    <div class="typing-dot"></div>
+    <div class="typing-dot"></div>
+  </div>
+  <div class="chat-input-area">
+    <textarea class="chat-input" id="chat-input" placeholder="Type your message..." rows="1" onkeydown="handleKeyDown(event)" oninput="autoResize(this)"></textarea>
+    <button class="send-btn" id="send-btn" onclick="handleSend()">&#8593;</button>
+  </div>
+</div>
+
+<!-- ─── Phase F: Trial-ended screen ─────────────────────────────────────── -->
+<!--
+  Shown when the free trial is exhausted (prompts or time limit).
+  app.js.showTrialEndedScreen() transitions here from the chat screen.
+  Users can register interest in the organizational pilot study, or sign out.
+-->
+<div id="trial-ended-screen" class="screen">
+  <div class="trial-ended-card">
+
+    <div class="trial-ended-logo">
+      <h1>Tether<span> AI</span></h1>
+    </div>
+
+    <!-- Reason text is updated by app.js.showTrialEndedScreen() -->
+    <h2 class="trial-ended-headline" id="trial-end-reason">
+      You&rsquo;ve used all 60 prompts in your free trial.
+    </h2>
+
+    <div class="trial-ended-body">
+      <p>That&rsquo;s 3 sessions worth of real coaching work &mdash; navigating something that matters at work. We hope it helped.</p>
+      <p>Tether is being developed as an organizational resilience tool for companies going through change. We&rsquo;re actively building pilot partnerships with HR and L&amp;D teams.</p>
+      <p>If you want to bring Tether to your workplace &mdash; or stay in the loop about future access &mdash; register your interest below. We&rsquo;ll follow up personally.</p>
+    </div>
+
+    <div class="trial-ended-divider"></div>
+
+    <div class="trial-ended-cta-label">Register your interest</div>
+
+    <!-- Pilot interest form -->
+    <div id="pilot-interest-form">
+      <div class="form-group">
+        <label>Your name</label>
+        <input type="text" id="pilot-name" placeholder="First name" autocomplete="given-name">
+      </div>
+      <div class="form-group">
+        <label>Email</label>
+        <!-- Pre-filled + read-only by app.js — user already authenticated -->
+        <input type="email" id="pilot-email" placeholder="your@email.com" readonly autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label>Company / Organization <span class="label-optional">(optional)</span></label>
+        <input type="text" id="pilot-company" placeholder="Where do you work?">
+      </div>
+      <div class="form-group">
+        <label>What brought you here? <span class="label-optional">(optional)</span></label>
+        <textarea id="pilot-notes" rows="2" placeholder="A sentence or two is plenty&hellip;"></textarea>
+      </div>
+
+      <button class="auth-btn" id="pilot-submit-btn" onclick="handlePilotInterestSubmit()">Register Interest</button>
+      <div class="auth-error" id="pilot-error"></div>
+    </div>
+
+    <!-- Success state — shown after form submission -->
+    <div class="pilot-interest-success" id="pilot-interest-success">
+      <div class="checkmark">&#10003;</div>
+      <p>We&rsquo;ll be in touch by email when there&rsquo;s a program that fits.<br>Thank you for trying Tether.</p>
+    </div>
+
+    <button class="trial-ended-signout" onclick="handleSignOut()">Sign Out</button>
+
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="auth.js"></script>
+<script src="memory.js"></script>
+<script src="coaching.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
