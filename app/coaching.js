@@ -1,16 +1,23 @@
-// ─── Tether AI Coach — Coaching Module (HARDENED v2) ───────────────────────
+// ─── Tether AI Coach — Coaching Module (Phase E: Pilot 403 handling) ─────────
 // Destination in repo: tether-ai-coach/app/coaching.js
 //
-// Changes from prior version (JWT hardening, Phase 1):
-//   1. /chat calls now include the user's Supabase access token in the
-//      Authorization header, via `getAuthHeaders()` (defined in memory.js).
-//   2. 401 responses are handled distinctly — the user's session expired or
-//      is invalid, and they should be told to sign back in rather than
-//      retrying silently.
+// Changes from live baseline (coaching.js as of 2026-04-22):
+//
+//   Phase E — 403 pilot access responses (2026-04-22):
+//   The worker now returns HTTP 403 with a JSON body containing { error, message }
+//   when a user's company pilot is inactive, not yet started, or has concluded.
+//   Previously any non-401 error fell through to the generic "I'm having trouble
+//   connecting" message. Now the worker's message is surfaced directly to the
+//   user so they understand why access is unavailable and what to do next.
+//
+//   Error codes returned by the worker:
+//     pilot_inactive    — company.active = false
+//     pilot_not_started — pilot_start is in the future
+//     pilot_concluded   — pilot_end is in the past
 
 let conversationHistory = [];
 
-// ─── Send Message ───────────────────────────────────────────────────────────
+// ─── Send Message ────────────────────────────────────────────────────────────
 // Sends user message + full conversation history to Worker, returns assistant reply.
 async function sendMessage(userMessage) {
   conversationHistory.push({ role: 'user', content: userMessage });
@@ -30,10 +37,23 @@ async function sendMessage(userMessage) {
       conversationHistory.pop(); // Remove the user message that failed
 
       // 401 = session expired or token rejected by worker.
-      // Don't retry silently — tell the user to re-auth.
       if (res.status === 401) {
         return "Your session has expired. Please sign out and sign back in to continue.";
       }
+
+      // 403 = company pilot access denied (pilot_inactive, pilot_not_started,
+      // or pilot_concluded). Surface the worker's human-readable message so
+      // the user knows what happened and who to contact.
+      if (res.status === 403) {
+        try {
+          const errData = JSON.parse(errText);
+          if (errData.message) return errData.message;
+        } catch (_) {
+          // errText wasn't JSON — fall through to the generic 403 copy below
+        }
+        return "Access to Tether is not available at this time. Please contact your HR or L&D team for more information.";
+      }
+
       return "I'm having trouble connecting right now. Please try again in a moment.";
     }
     const data = await res.json();
