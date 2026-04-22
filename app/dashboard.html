@@ -478,7 +478,7 @@
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    height: 32px;
+    height: 80px;
     font-family: var(--mono);
     font-size: 8px;
     color: var(--ink-dim);
@@ -494,7 +494,7 @@
     color: var(--ink-dim);
     font-weight: 600;
   }
-  .sparkline { display: flex; align-items: flex-end; gap: 3px; height: 32px; }
+  .sparkline { display: flex; align-items: flex-end; gap: 3px; height: 80px; }
   .spark-bar {
     flex: 1;
     background: var(--ink);
@@ -1009,9 +1009,13 @@ const SUPABASE_ANON_KEY = `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
           const h = Math.round((v / max) * 100);
           return `<div class="spark-bar ${s.color}" style="height:${Math.max(h, 4)}%"></div>`;
         }).join('');
-        const yTop = max.toFixed(1);
-        const yBot = visibleAvgs.length ? Math.min(...visibleAvgs).toFixed(1) : '0';
-        html += `<div class="trend-row"><div class="trend-label">${s.label}</div><div class="y-axis"><span>${yTop}</span><span>${yBot}</span></div><div class="sparkline">${bars}</div></div>`;
+        const yMin = visibleAvgs.length ? Math.min(...visibleAvgs) : 0;
+        const yRange = max - yMin;
+        const y1 = max.toFixed(1);
+        const y2 = (max - yRange * 0.33).toFixed(1);
+        const y3 = (max - yRange * 0.66).toFixed(1);
+        const y4 = yMin.toFixed(1);
+        html += `<div class="trend-row"><div class="trend-label">${s.label}</div><div class="y-axis"><span>${y1}</span><span>${y2}</span><span>${y3}</span><span>${y4}</span></div><div class="sparkline">${bars}</div></div>`;
       });
       html += `<div class="privacy-floor-msg" style="margin-top:10px;font-size:9px;">Weeks with fewer than ${PRIVACY_FLOOR} assessments shown as empty to protect privacy.</div>`;
       document.getElementById('trendPanel').innerHTML = html;
@@ -1053,7 +1057,7 @@ const SUPABASE_ANON_KEY = `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
       document.getElementById('engagementPanel').innerHTML = `
         <div class="trend-row">
           <div class="trend-label">Sessions / Week</div>
-          <div class="y-axis"><span>${max}</span><span>0</span></div>
+          <div class="y-axis"><span>${max}</span><span>${Math.round(max*0.66)}</span><span>${Math.round(max*0.33)}</span><span>0</span></div>
           <div class="sparkline">${bars}</div>
         </div>
         <div class="privacy-floor-msg" style="margin-top:10px;font-size:9px;">Weeks with fewer than ${PRIVACY_FLOOR} sessions shown as empty to protect privacy.</div>`;
