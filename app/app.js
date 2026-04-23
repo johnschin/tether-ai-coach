@@ -673,7 +673,7 @@ async function loadSessionHistory() {
   try {
     const { data, error } = await supabaseClient
       .from('session_summaries')
-      .select('session_date, summary, themes, emotional_tone, created_at')
+      .select('title, summary, pillar, topics, message_count, created_at')
       .eq('user_id', currentUser.id)
       .order('created_at', { ascending: false })
       .limit(20);
@@ -693,35 +693,45 @@ async function loadSessionHistory() {
       const item = document.createElement('div');
       item.className = 'sidebar-session-item';
 
-      // Format date — session_date is a DATE column ('YYYY-MM-DD')
-      let dateStr;
-      if (session.session_date) {
-        // Append T00:00:00 to avoid UTC-offset date-shift on local machines
-        dateStr = new Date(session.session_date + 'T00:00:00').toLocaleDateString('en-US', {
-          month: 'short', day: 'numeric', year: 'numeric'
-        });
-      } else if (session.created_at) {
-        dateStr = new Date(session.created_at).toLocaleDateString('en-US', {
-          month: 'short', day: 'numeric', year: 'numeric'
-        });
-      } else {
-        dateStr = 'Session';
-      }
+      // Date from created_at (timestamptz)
+      const dateStr = session.created_at
+        ? new Date(session.created_at).toLocaleDateString('en-US', {
+            month: 'short', day: 'numeric', year: 'numeric'
+          })
+        : 'Session';
 
-      // Tone badge
-      const rawTone   = (session.emotional_tone || '').toLowerCase().trim();
-      const knownTones = ['positive','hopeful','neutral','reflective','anxious','stressed','frustrated','overwhelmed'];
-      const toneClass  = knownTones.includes(rawTone) ? ('tone-badge--' + rawTone) : 'tone-badge--default';
-      const toneBadge  = rawTone
-        ? '<span class="tone-badge ' + toneClass + '">' + escapeHtml(session.emotional_tone) + '</span>'
+      // Pillar badge — maps Tether's four pillars to colors
+      const rawPillar = (session.pillar || '').toLowerCase().trim();
+      const pillarColors = {
+        stress:                  'background:#fff8e1;color:#f57f17;',
+        stress_burnout:          'background:#fff8e1;color:#f57f17;',
+        burnout:                 'background:#fff8e1;color:#f57f17;',
+        anger:                   'background:#fce4ec;color:#c62828;',
+        anger_reactivity:        'background:#fce4ec;color:#c62828;',
+        reactivity:              'background:#fce4ec;color:#c62828;',
+        relationships:           'background:#e0f7fa;color:#00838f;',
+        relationships_communication: 'background:#e0f7fa;color:#00838f;',
+        communication:           'background:#e0f7fa;color:#00838f;',
+        identity:                'background:#ede7f6;color:#4527a0;',
+        identity_meaning:        'background:#ede7f6;color:#4527a0;',
+        meaning:                 'background:#ede7f6;color:#4527a0;',
+      };
+      const pillarStyle = pillarColors[rawPillar] || 'background:var(--cream);color:var(--muted);';
+      const pillarBadge = rawPillar
+        ? '<span class="tone-badge" style="' + pillarStyle + '">' + escapeHtml(session.pillar) + '</span>'
         : '';
 
-      // Theme chips (max 4 shown to keep items compact)
-      let themesHtml = '';
-      if (Array.isArray(session.themes) && session.themes.length > 0) {
-        themesHtml =
+      // Message count sub-label
+      const msgCount = session.message_count
+        ? '<span class="session-msg-count">' + session.message_count + ' messages</span>'
+        : '';
+
+      // Topic chips — column is named 'topics' in the actual schema
+      let topicsHtml = '';
+      if (Array.isArray(session.topics) && session.topics.length > 0) {
+        topicsHtml =
           '<div class="session-themes">' +
-          session.themes.slice(0, 4).map(function(t) {
+          session.topics.slice(0, 4).map(function(t) {
             return '<span class="theme-chip">' + escapeHtml(String(t)) + '</span>';
           }).join('') +
           '</div>';
@@ -730,10 +740,14 @@ async function loadSessionHistory() {
       item.innerHTML =
         '<div class="session-item-header">' +
           '<span class="session-item-date">' + escapeHtml(dateStr) + '</span>' +
-          toneBadge +
+          pillarBadge +
         '</div>' +
+        (session.title
+          ? '<p class="session-title-text">' + escapeHtml(session.title) + '</p>'
+          : '') +
         '<p class="session-summary-text">' + escapeHtml(session.summary || 'No summary recorded.') + '</p>' +
-        themesHtml;
+        (msgCount ? '<p class="session-msg-count">' + session.message_count + ' messages</p>' : '') +
+        topicsHtml;
 
       container.appendChild(item);
     });
