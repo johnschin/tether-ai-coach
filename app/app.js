@@ -394,6 +394,8 @@ function resetMagicForm() {
 }
 
 async function handleSignOut() {
+  // Phase G: close sidebar before signing out (it's position:fixed and survives screen transitions)
+  closeSidebar();
   if (typeof conversationHistory !== 'undefined' && conversationHistory.length > 0) {
     await endSession(currentUser.id);
   }
@@ -415,9 +417,12 @@ async function startUserSession() {
   // Phase F: initialise trial status bar (hidden until first trial response arrives)
   const statusBar = document.getElementById('trial-status-bar');
   if (statusBar) {
-    // Will become visible once the first chat response includes trial_status
     statusBar.style.display = 'none';
   }
+
+  // Phase G: show hamburger button now that a session is active
+  const hamburgerBtn = document.getElementById('hamburger-btn');
+  if (hamburgerBtn) hamburgerBtn.style.display = 'flex';
 
   await initSession(currentUser.id);
   showScreen('adkar-screen');
@@ -459,7 +464,6 @@ function updateTrialStatusBar(trialStatus) {
 }
 
 // Called by coaching.js when the worker returns 403 trial_expired.
-// Also called directly after the last prompt (prompts_remaining === 0).
 function handleTrialExpired(reason) {
   trialEndReason = reason || 'prompts_exhausted';
   showTrialEndedScreen(trialEndReason);
@@ -467,15 +471,11 @@ function handleTrialExpired(reason) {
 
 // Transitions to the trial-ended screen and pre-fills the pilot interest form.
 function showTrialEndedScreen(reason) {
-  // Guard against double-call: the last-prompt 1500ms timeout path and a
-  // subsequent 403 from the worker can both call this in quick succession.
-  // If the screen is already active the form fields must not be wiped again
-  // (user may have started filling them in).
+  // Guard against double-call
   if (document.getElementById('trial-ended-screen')?.classList.contains('active')) return;
 
   trialEndReason = reason || 'prompts_exhausted';
 
-  // Pre-fill form fields from current user
   if (currentUser) {
     const nameEl    = document.getElementById('pilot-name');
     const emailEl   = document.getElementById('pilot-email');
@@ -484,7 +484,6 @@ function showTrialEndedScreen(reason) {
     if (emailEl) emailEl.value = currentUser.email || '';
   }
 
-  // Adjust heading copy based on reason
   const reasonEl = document.getElementById('trial-end-reason');
   if (reasonEl) {
     if (reason === 'time_limit') {
@@ -498,10 +497,7 @@ function showTrialEndedScreen(reason) {
 }
 
 // Advisory banner shown inside chat when session hits 20 prompts.
-// Suggests ending the session (not a hard block — user can keep going
-// until the total 60-prompt server cap is enforced).
 function showSessionLimitBanner() {
-  // Only show once per session
   if (document.getElementById('session-limit-banner')) return;
 
   const messages = document.getElementById('messages');
@@ -537,9 +533,6 @@ async function handlePilotInterestSubmit() {
   if (errorEl) errorEl.textContent = '';
   if (btn)     { btn.disabled = true; btn.textContent = 'Registering\u2026'; }
 
-  // currentUser must be set — if somehow it's not (e.g. session dropped
-  // at the same moment the trial ended) surface a friendly error rather
-  // than a silent RLS rejection from Supabase.
   if (!currentUser) {
     if (errorEl) errorEl.textContent = 'Your session has expired. Please sign out and sign back in.';
     if (btn)     { btn.disabled = false; btn.textContent = 'Register Interest'; }
@@ -563,7 +556,6 @@ async function handlePilotInterestSubmit() {
 
     if (error) throw error;
 
-    // Show success state
     const form        = document.getElementById('pilot-interest-form');
     const successMsg  = document.getElementById('pilot-interest-success');
     if (form)       form.style.display = 'none';
@@ -573,6 +565,183 @@ async function handlePilotInterestSubmit() {
     console.error('[pilot-interest] submit failed:', e?.message || e);
     if (errorEl) errorEl.textContent = 'Something went wrong. Please try again in a moment, or reach out to your HR or L&D team for assistance.';
     if (btn)     { btn.disabled = false; btn.textContent = 'Register Interest'; }
+  }
+}
+
+// ─── Phase G: Copy conversation ────────────────────────────────────────────
+// Reads the live conversationHistory array via getConversationHistory()
+// (defined in coaching.js), formats as plain text, copies to clipboard.
+function copyConversation() {
+  const history = typeof getConversationHistory === 'function'
+    ? getConversationHistory()
+    : [];
+
+  if (!history || history.length === 0) {
+    alert('No conversation to copy yet — start chatting first.');
+    return;
+  }
+
+  const text = history.map(function(msg) {
+    const label = msg.role === 'user' ? 'You' : 'Tether';
+    return label + ':\n' + msg.content;
+  }).join('\n\n---\n\n');
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(function() {
+      showCopyFeedback();
+    }).catch(function() {
+      fallbackCopy(text);
+    });
+  } else {
+    fallbackCopy(text);
+  }
+}
+
+function fallbackCopy(text) {
+  const el = document.createElement('textarea');
+  el.value = text;
+  el.setAttribute('readonly', '');
+  el.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0;';
+  document.body.appendChild(el);
+  el.select();
+  try {
+    document.execCommand('copy');
+    showCopyFeedback();
+  } catch (e) {
+    alert('Copy failed. Please select and copy the text manually.');
+  }
+  document.body.removeChild(el);
+}
+
+function showCopyFeedback() {
+  const btn = document.getElementById('copy-btn');
+  if (!btn) return;
+  const originalText = btn.textContent;
+  btn.textContent = 'Copied!';
+  btn.disabled = true;
+  setTimeout(function() {
+    btn.textContent = originalText;
+    btn.disabled = false;
+  }, 2000);
+}
+
+// ─── Phase G: Session history sidebar ─────────────────────────────────────
+// Hamburger button toggles a slide-in panel showing past session summaries
+// from the session_summaries table (user_id, session_date, summary, themes,
+// emotional_tone). Requires RLS SELECT policy — see phase_g_rls.sql.
+
+function toggleSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  if (!sidebar) return;
+  sidebar.classList.contains('open') ? closeSidebar() : openSidebar();
+}
+
+function openSidebar() {
+  const sidebar      = document.getElementById('sidebar');
+  const overlay      = document.getElementById('sidebar-overlay');
+  const hamburgerBtn = document.getElementById('hamburger-btn');
+  if (!sidebar || !overlay) return;
+  sidebar.classList.add('open');
+  overlay.classList.add('open');
+  if (hamburgerBtn) hamburgerBtn.classList.add('open');
+  loadSessionHistory();
+}
+
+function closeSidebar() {
+  const sidebar      = document.getElementById('sidebar');
+  const overlay      = document.getElementById('sidebar-overlay');
+  const hamburgerBtn = document.getElementById('hamburger-btn');
+  if (!sidebar || !overlay) return;
+  sidebar.classList.remove('open');
+  overlay.classList.remove('open');
+  if (hamburgerBtn) hamburgerBtn.classList.remove('open');
+}
+
+async function loadSessionHistory() {
+  const container = document.getElementById('sidebar-sessions');
+  if (!container) return;
+
+  // Guard: should never happen since hamburger is only shown after session starts,
+  // but defensive check prevents crash if somehow called without a user.
+  if (!currentUser) {
+    container.innerHTML = '<div class="sidebar-empty">Please sign in to view past sessions.</div>';
+    return;
+  }
+
+  container.innerHTML = '<div class="sidebar-loading">Loading sessions\u2026</div>';
+
+  try {
+    const { data, error } = await supabaseClient
+      .from('session_summaries')
+      .select('session_date, summary, themes, emotional_tone, created_at')
+      .eq('user_id', currentUser.id)
+      .order('created_at', { ascending: false })
+      .limit(20);
+
+    if (error) throw error;
+
+    if (!data || data.length === 0) {
+      container.innerHTML =
+        '<div class="sidebar-empty">' +
+        'No past sessions yet.<br>End a session to save your first summary.' +
+        '</div>';
+      return;
+    }
+
+    container.innerHTML = '';
+    data.forEach(function(session) {
+      const item = document.createElement('div');
+      item.className = 'sidebar-session-item';
+
+      // Format date — session_date is a DATE column ('YYYY-MM-DD')
+      let dateStr;
+      if (session.session_date) {
+        // Append T00:00:00 to avoid UTC-offset date-shift on local machines
+        dateStr = new Date(session.session_date + 'T00:00:00').toLocaleDateString('en-US', {
+          month: 'short', day: 'numeric', year: 'numeric'
+        });
+      } else if (session.created_at) {
+        dateStr = new Date(session.created_at).toLocaleDateString('en-US', {
+          month: 'short', day: 'numeric', year: 'numeric'
+        });
+      } else {
+        dateStr = 'Session';
+      }
+
+      // Tone badge
+      const rawTone   = (session.emotional_tone || '').toLowerCase().trim();
+      const knownTones = ['positive','hopeful','neutral','reflective','anxious','stressed','frustrated','overwhelmed'];
+      const toneClass  = knownTones.includes(rawTone) ? ('tone-badge--' + rawTone) : 'tone-badge--default';
+      const toneBadge  = rawTone
+        ? '<span class="tone-badge ' + toneClass + '">' + escapeHtml(session.emotional_tone) + '</span>'
+        : '';
+
+      // Theme chips (max 4 shown to keep items compact)
+      let themesHtml = '';
+      if (Array.isArray(session.themes) && session.themes.length > 0) {
+        themesHtml =
+          '<div class="session-themes">' +
+          session.themes.slice(0, 4).map(function(t) {
+            return '<span class="theme-chip">' + escapeHtml(String(t)) + '</span>';
+          }).join('') +
+          '</div>';
+      }
+
+      item.innerHTML =
+        '<div class="session-item-header">' +
+          '<span class="session-item-date">' + escapeHtml(dateStr) + '</span>' +
+          toneBadge +
+        '</div>' +
+        '<p class="session-summary-text">' + escapeHtml(session.summary || 'No summary recorded.') + '</p>' +
+        themesHtml;
+
+      container.appendChild(item);
+    });
+
+  } catch (e) {
+    console.error('[sidebar] loadSessionHistory error:', e?.message || e);
+    container.innerHTML =
+      '<div class="sidebar-empty">Couldn\u2019t load session history. Please try again.</div>';
   }
 }
 
@@ -622,9 +791,6 @@ async function handleSend() {
   showTyping(false);
 
   // Empty string is the sentinel from coaching.js when trial has expired.
-  // coaching.js has already queued showTrialEndedScreen via setTimeout — keep
-  // the send button disabled and bail out so the screen transition happens
-  // cleanly without the input re-enabling first.
   if (!response) return;
 
   addMessage('assistant', response);
@@ -641,12 +807,16 @@ function autoResize(el) {
 }
 async function handleEndSession() {
   if (confirm('End this session? Tether will save a summary to remember your progress.')) {
+    // Phase G: close sidebar before leaving chat screen
+    closeSidebar();
     await endSession(currentUser.id);
     adkarScores = {};
     document.getElementById('messages').innerHTML =
       `<div class="welcome-msg"><strong>Session saved.</strong> Your progress has been noted. Come back whenever you need.</div>`;
     // Phase F: reset session prompt counter for the next session
     if (typeof resetSessionPromptCount === 'function') resetSessionPromptCount();
+    // Phase G: reset conversation history so next session's copy is clean
+    if (typeof resetConversationHistory === 'function') resetConversationHistory();
     showScreen('adkar-screen');
   }
 }

@@ -110,18 +110,66 @@
 
   /* ─── Chat screen ──────────────────────────────────────────────────────── */
   #chat-screen { background: var(--cream); }
-  .chat-header { background: #fff; border-bottom: 1px solid var(--sand); padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+
+  /* Phase G: chat header — left wrapper holds hamburger + title together */
+  .chat-header {
+    background: #fff;
+    border-bottom: 1px solid var(--sand);
+    padding: 16px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+  }
+  .chat-header-left-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0; /* allow text truncation on small screens */
+  }
   .chat-header-left h2 { font-family: 'Playfair Display', serif; font-size: 20px; font-weight: 600; color: #1a1a1a; }
   .chat-header-left p { font-size: 11px; color: var(--muted); margin-top: 2px; }
-  .header-actions { display: flex; gap: 8px; }
+  .header-actions { display: flex; gap: 8px; flex-shrink: 0; }
   .icon-btn { background: #f5f0ea; border: 1px solid var(--sand); border-radius: 8px; padding: 8px 12px; color: var(--plum); font-size: 12px; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.2s; }
   .icon-btn:hover { background: var(--sand); color: #1a1a1a; }
+  .icon-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* ─── Phase G: Hamburger button ────────────────────────────────────────── */
+  /* Hidden by default. app.js shows it (display:flex) once session starts.   */
+  .hamburger-btn {
+    display: none; /* shown by JS at session start */
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 5px;
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    padding: 6px;
+    transition: background 0.2s;
+  }
+  .hamburger-btn:hover { background: var(--cream); }
+  .ham-bar {
+    display: block;
+    width: 18px;
+    height: 2px;
+    background: var(--plum);
+    border-radius: 2px;
+    transition: transform 0.25s ease, opacity 0.2s ease;
+    transform-origin: center;
+  }
+  /* Animate 3 bars → × when sidebar is open */
+  .hamburger-btn.open .ham-bar:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+  .hamburger-btn.open .ham-bar:nth-child(2) { opacity: 0; transform: scaleX(0); }
+  .hamburger-btn.open .ham-bar:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
 
   /* ─── Phase F: Trial status bar ────────────────────────────────────────── */
-  /* Sits between chat-header and messages. Hidden by default; JS shows it
-     when the first trial_status arrives from the worker. */
   .trial-status-bar {
-    display: none; /* shown by JS */
+    display: none;
     align-items: center;
     justify-content: center;
     padding: 6px 16px;
@@ -134,18 +182,8 @@
     flex-shrink: 0;
     gap: 6px;
   }
-  /* Amber — < 15 prompts remaining */
-  .trial-status-bar--warning {
-    background: #fff9f0;
-    border-bottom-color: #f0d8b5;
-    color: #8a6d3b;
-  }
-  /* Brick — < 5 prompts remaining */
-  .trial-status-bar--urgent {
-    background: #fff5f5;
-    border-bottom-color: #f5c6c6;
-    color: #a15555;
-  }
+  .trial-status-bar--warning { background: #fff9f0; border-bottom-color: #f0d8b5; color: #8a6d3b; }
+  .trial-status-bar--urgent  { background: #fff5f5; border-bottom-color: #f5c6c6; color: #a15555; }
 
   .messages { flex: 1; overflow-y: auto; padding: 20px 16px; display: flex; flex-direction: column; gap: 16px; }
   .message { display: flex; flex-direction: column; max-width: 85%; animation: fadeIn 0.3s ease; }
@@ -183,8 +221,6 @@
   html.auth-callback #loading-screen { display: flex !important; }
 
   /* ─── Phase F: Trial-ended screen ─────────────────────────────────────── */
-  /* Shown when the free trial is exhausted (prompts or time). Follows the
-     same design language as the auth / consent screens. */
   #trial-ended-screen {
     justify-content: flex-start;
     align-items: center;
@@ -202,82 +238,181 @@
     box-shadow: 0 12px 48px rgba(78,74,85,0.12);
     margin: 24px auto 0;
   }
-  .trial-ended-logo {
-    text-align: center;
-    margin-bottom: 28px;
-  }
-  .trial-ended-logo h1 {
-    font-family: 'Playfair Display', serif;
-    font-size: 28px;
-    font-weight: 600;
-    color: var(--plum);
-    letter-spacing: -0.3px;
-  }
+  .trial-ended-logo { text-align: center; margin-bottom: 28px; }
+  .trial-ended-logo h1 { font-family: 'Playfair Display', serif; font-size: 28px; font-weight: 600; color: var(--plum); letter-spacing: -0.3px; }
   .trial-ended-logo h1 span { color: var(--teal); }
-  .trial-ended-headline {
+  .trial-ended-headline { font-family: 'Playfair Display', serif; font-size: 22px; font-weight: 600; color: var(--plum); letter-spacing: -0.2px; margin-bottom: 12px; line-height: 1.25; }
+  .trial-ended-body { font-size: 14px; color: var(--plum); line-height: 1.65; margin-bottom: 24px; }
+  .trial-ended-body p + p { margin-top: 10px; }
+  .trial-ended-divider { height: 1px; background: var(--sand); margin: 24px 0; }
+  .trial-ended-cta-label { font-size: 12px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); margin-bottom: 16px; }
+  .pilot-interest-success { display: none; text-align: center; padding: 20px 0 8px; }
+  .pilot-interest-success .checkmark { font-size: 36px; color: var(--teal); margin-bottom: 12px; line-height: 1; }
+  .pilot-interest-success p { font-size: 14px; color: var(--plum); line-height: 1.6; }
+  .trial-ended-signout { width: 100%; margin-top: 20px; padding: 10px; background: transparent; border: 1px solid var(--sand); border-radius: 8px; color: var(--muted); font-family: 'DM Sans', sans-serif; font-size: 13px; cursor: pointer; text-align: center; transition: all 0.2s; }
+  .trial-ended-signout:hover { background: var(--sand); color: var(--plum); }
+
+  /* ─── Phase G: Sidebar overlay ─────────────────────────────────────────── */
+  /* Dark backdrop — shown when sidebar is open, closes on click */
+  .sidebar-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(78, 74, 85, 0.35);
+    z-index: 200;
+    /* Only visible on the chat screen — overlay is in the DOM always but     */
+    /* only harmful if accidentally shown on other screens (not possible since */
+    /* openSidebar() is only wired to the hamburger btn which is chat-only).  */
+  }
+  .sidebar-overlay.open { display: block; }
+
+  /* ─── Phase G: Sidebar panel ───────────────────────────────────────────── */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 300px;
+    max-width: 85vw;
+    background: #fff;
+    border-right: 1px solid var(--sand);
+    z-index: 201;
+    display: flex;
+    flex-direction: column;
+    transform: translateX(-100%);
+    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 4px 0 24px rgba(78, 74, 85, 0.12);
+  }
+  .sidebar.open { transform: translateX(0); }
+
+  .sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--sand);
+    flex-shrink: 0;
+  }
+  .sidebar-header span {
     font-family: 'Playfair Display', serif;
-    font-size: 22px;
+    font-size: 17px;
     font-weight: 600;
     color: var(--plum);
-    letter-spacing: -0.2px;
-    margin-bottom: 12px;
-    line-height: 1.25;
   }
-  .trial-ended-body {
-    font-size: 14px;
-    color: var(--plum);
-    line-height: 1.65;
-    margin-bottom: 24px;
+  .sidebar-close {
+    background: none;
+    border: none;
+    font-size: 22px;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 4px 8px;
+    line-height: 1;
+    border-radius: 6px;
+    transition: background 0.15s, color 0.15s;
   }
-  .trial-ended-body p + p { margin-top: 10px; }
-  .trial-ended-divider {
-    height: 1px;
-    background: var(--sand);
-    margin: 24px 0;
+  .sidebar-close:hover { background: var(--cream); color: var(--plum); }
+
+  .sidebar-sessions {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 0;
   }
-  .trial-ended-cta-label {
+
+  /* ─── Phase G: Session history items ──────────────────────────────────── */
+  .sidebar-session-item {
+    padding: 14px 20px;
+    border-bottom: 1px solid #f5f0ea;
+  }
+  .sidebar-session-item:last-child { border-bottom: none; }
+
+  .session-item-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+  .session-item-date {
     font-size: 12px;
     font-weight: 600;
-    letter-spacing: 1px;
-    text-transform: uppercase;
-    color: var(--muted);
-    margin-bottom: 16px;
-  }
-  /* Pilot interest success state */
-  .pilot-interest-success {
-    display: none;
-    text-align: center;
-    padding: 20px 0 8px;
-  }
-  .pilot-interest-success .checkmark {
-    font-size: 36px;
-    color: var(--teal);
-    margin-bottom: 12px;
-    line-height: 1;
-  }
-  .pilot-interest-success p {
-    font-size: 14px;
     color: var(--plum);
-    line-height: 1.6;
+    flex-shrink: 0;
   }
-  .trial-ended-signout {
-    width: 100%;
-    margin-top: 20px;
-    padding: 10px;
-    background: transparent;
+
+  /* Emotional tone badges */
+  .tone-badge {
+    font-size: 10px;
+    font-weight: 500;
+    padding: 2px 7px;
+    border-radius: 10px;
+    text-transform: capitalize;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .tone-badge--positive    { background: #e8f5e9; color: #2e7d32; }
+  .tone-badge--hopeful     { background: #e8f5e9; color: #2e7d32; }
+  .tone-badge--neutral     { background: #e8eaf6; color: #3949ab; }
+  .tone-badge--reflective  { background: #e0f7fa; color: #00838f; }
+  .tone-badge--anxious     { background: #fff8e1; color: #f57f17; }
+  .tone-badge--stressed    { background: #fff8e1; color: #f57f17; }
+  .tone-badge--frustrated  { background: #fce4ec; color: #c62828; }
+  .tone-badge--overwhelmed { background: #fce4ec; color: #c62828; }
+  .tone-badge--default     { background: var(--cream); color: var(--muted); }
+
+  .session-summary-text {
+    font-size: 13px;
+    color: var(--slate);
+    line-height: 1.55;
+    margin-bottom: 8px;
+  }
+
+  /* Theme chips */
+  .session-themes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .theme-chip {
+    font-size: 10px;
+    padding: 2px 7px;
+    background: var(--cream);
     border: 1px solid var(--sand);
     border-radius: 8px;
     color: var(--muted);
-    font-family: 'DM Sans', sans-serif;
-    font-size: 13px;
-    cursor: pointer;
-    text-align: center;
-    transition: all 0.2s;
+    white-space: nowrap;
   }
-  .trial-ended-signout:hover { background: var(--sand); color: var(--plum); }
+
+  /* Empty / loading states inside the sidebar */
+  .sidebar-empty {
+    padding: 40px 20px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.7;
+  }
+  .sidebar-loading {
+    padding: 40px 20px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 13px;
+  }
 </style>
 </head>
 <body>
+
+<!-- ─── Phase G: Sidebar overlay (closes on click) ───────────────────────── -->
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
+
+<!-- ─── Phase G: Session history sidebar ─────────────────────────────────── -->
+<div class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <span>Past Sessions</span>
+    <button class="sidebar-close" onclick="closeSidebar()" aria-label="Close past sessions">&times;</button>
+  </div>
+  <div class="sidebar-sessions" id="sidebar-sessions">
+    <!-- Populated by app.js loadSessionHistory() -->
+  </div>
+</div>
 
 <!-- ─── Loading screen (magic-link flicker suppressor) ───────────────────── -->
 <div id="loading-screen" class="screen">
@@ -446,12 +581,24 @@
 
 <!-- ─── Chat screen ──────────────────────────────────────────────────────── -->
 <div id="chat-screen" class="screen">
+
+  <!-- Phase G: left side now wraps hamburger btn + title together -->
   <div class="chat-header">
-    <div class="chat-header-left">
-      <h2>Tether</h2>
-      <p id="user-greeting">Your private resilience coach</p>
+    <div class="chat-header-left-wrapper">
+      <!-- Hamburger: hidden by default, shown by app.js once session starts -->
+      <button class="hamburger-btn" id="hamburger-btn" onclick="toggleSidebar()" aria-label="Past sessions" title="Past sessions">
+        <span class="ham-bar"></span>
+        <span class="ham-bar"></span>
+        <span class="ham-bar"></span>
+      </button>
+      <div class="chat-header-left">
+        <h2>Tether</h2>
+        <p id="user-greeting">Your private resilience coach</p>
+      </div>
     </div>
     <div class="header-actions">
+      <!-- Phase G: copy button -->
+      <button class="icon-btn" id="copy-btn" onclick="copyConversation()" title="Copy conversation">Copy</button>
       <button class="icon-btn" onclick="handleEndSession()">End Session</button>
       <button class="icon-btn" onclick="handleSignOut()">Sign Out</button>
     </div>
@@ -480,11 +627,6 @@
 </div>
 
 <!-- ─── Phase F: Trial-ended screen ─────────────────────────────────────── -->
-<!--
-  Shown when the free trial is exhausted (prompts or time limit).
-  app.js.showTrialEndedScreen() transitions here from the chat screen.
-  Users can register interest in the organizational pilot study, or sign out.
--->
 <div id="trial-ended-screen" class="screen">
   <div class="trial-ended-card">
 
@@ -492,7 +634,6 @@
       <h1>Tether<span> AI</span></h1>
     </div>
 
-    <!-- Reason text is updated by app.js.showTrialEndedScreen() -->
     <h2 class="trial-ended-headline" id="trial-end-reason">
       You&rsquo;ve used all 60 prompts in your free trial.
     </h2>
@@ -507,7 +648,6 @@
 
     <div class="trial-ended-cta-label">Register your interest</div>
 
-    <!-- Pilot interest form -->
     <div id="pilot-interest-form">
       <div class="form-group">
         <label>Your name</label>
@@ -515,7 +655,6 @@
       </div>
       <div class="form-group">
         <label>Email</label>
-        <!-- Pre-filled + read-only by app.js — user already authenticated -->
         <input type="email" id="pilot-email" placeholder="your@email.com" readonly autocomplete="off">
       </div>
       <div class="form-group">
@@ -531,7 +670,6 @@
       <div class="auth-error" id="pilot-error"></div>
     </div>
 
-    <!-- Success state — shown after form submission -->
     <div class="pilot-interest-success" id="pilot-interest-success">
       <div class="checkmark">&#10003;</div>
       <p>We&rsquo;ll be in touch by email when there&rsquo;s a program that fits.<br>Thank you for trying Tether.</p>

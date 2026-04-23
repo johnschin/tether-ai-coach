@@ -1,32 +1,15 @@
-// ─── Tether AI Coach — Coaching Module (Phase F: Free Trial) ─────────────────
+// ─── Tether AI Coach — Coaching Module (Phase G: Copy + Session History) ────
 // Destination in repo: tether-ai-coach/app/coaching.js
 //
-// Changes from Phase E (phase_e_coaching.js):
+// Changes from Phase F (phase_f_coaching.js):
 //
-//   Phase F — Free trial prompt tracking + trial-expired handling (2026-04-22):
+//   Phase G — Copy conversation + session history sidebar (2026-04-22):
 //
-//   1. latestTrialStatus (module-level):
-//      Stores the most recent { prompts_used, prompts_remaining, started_at }
-//      returned by the worker on successful chat responses. Read by app.js via
-//      getTrialStatus() to update the trial status bar in the chat header.
+//   1. getConversationHistory() — new public accessor so app.js can read
+//      the conversationHistory array without the module needing to know
+//      about the copy feature. All copy logic lives in app.js.
 //
-//   2. sessionPromptCount (module-level):
-//      Counts prompts sent in the current coaching session (ADKAR → chat cycle).
-//      Resets to 0 when resetSessionPromptCount() is called from app.js at the
-//      start of each new session. At SESSION_PROMPT_LIMIT (20), showSessionLimitBanner()
-//      is called in app.js to suggest the user end the session and start fresh.
-//
-//   3. Trial-expired 403 handling:
-//      When the worker returns HTTP 403 with { error: 'trial_expired' }, instead
-//      of surfacing a chat-style error message, sendMessage() calls
-//      handleTrialExpired(reason) (defined in app.js) and returns an empty string
-//      so the caller adds nothing to the message list.
-//
-//   4. Last-prompt detection:
-//      When a successful response includes trial_status.prompts_remaining === 0,
-//      showTrialEndedScreen('prompts_exhausted') is called (from app.js) after a
-//      1.5s delay — enough time for the user to read the final coach message
-//      before the screen transitions.
+// All Phase F functionality is preserved unchanged.
 
 const SESSION_PROMPT_LIMIT = 20;
 
@@ -41,6 +24,13 @@ let sessionPromptCount = 0;
 // ─── Public accessors used by app.js ─────────────────────────────────────────
 function getTrialStatus()           { return latestTrialStatus; }
 function resetSessionPromptCount()  { sessionPromptCount = 0; }
+
+// Phase G: expose conversation history so app.js copyConversation() can read it
+function getConversationHistory()   { return conversationHistory; }
+
+// Phase G: reset conversation history between sessions so the copy button only
+// captures the current session. Called by app.js handleEndSession().
+function resetConversationHistory() { conversationHistory = []; }
 
 // ─── Conversation history ─────────────────────────────────────────────────────
 let conversationHistory = [];
@@ -81,12 +71,7 @@ async function sendMessage(userMessage) {
           const errData = JSON.parse(errText);
 
           // Phase F: trial expired — transition to the trial-ended screen.
-          // Do NOT decrement sessionPromptCount here: the prompt was sent to the
-          // server and rejected because the trial was already exhausted, so the
-          // count should stay at its current value (at or past SESSION_PROMPT_LIMIT).
           if (errData.error === 'trial_expired') {
-            // Call app.js handler after microtask to ensure the user message
-            // is rendered first (addMessage was already called in handleSend)
             setTimeout(() => {
               if (typeof handleTrialExpired === 'function') {
                 handleTrialExpired(errData.reason || 'unknown');
@@ -157,8 +142,6 @@ async function sendMessage(userMessage) {
     }
 
     // ── Per-session prompt limit soft nudge ───────────────────────────────────
-    // At SESSION_PROMPT_LIMIT, suggest the user end this session and start a
-    // fresh one to keep conversations focused. This is advisory — not a block.
     if (sessionPromptCount >= SESSION_PROMPT_LIMIT) {
       setTimeout(() => {
         if (typeof showSessionLimitBanner === 'function') {
