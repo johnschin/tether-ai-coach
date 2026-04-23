@@ -820,19 +820,15 @@ function autoResize(el) {
   el.style.height = Math.min(el.scrollHeight, 120) + 'px';
 }
 async function handleEndSession() {
-  if (confirm('End this session? Tether will save a summary to remember your progress.')) {
-    // Phase G: close sidebar before leaving chat screen
-    closeSidebar();
-    await endSession(currentUser.id);
-    adkarScores = {};
-    document.getElementById('messages').innerHTML =
-      `<div class="welcome-msg"><strong>Session saved.</strong> Your progress has been noted. Come back whenever you need.</div>`;
-    // Phase F: reset session prompt counter for the next session
-    if (typeof resetSessionPromptCount === 'function') resetSessionPromptCount();
-    // Phase G: reset conversation history so next session's copy is clean
-    if (typeof resetConversationHistory === 'function') resetConversationHistory();
-    showScreen('adkar-screen');
-  }
+  // Phase H: removed confirm() dialog — one click ends the session directly.
+  closeSidebar();
+  await endSession(currentUser.id);
+  adkarScores = {};
+  document.getElementById('messages').innerHTML =
+    `<div class="welcome-msg"><strong>Session saved.</strong> Your progress has been noted. Come back whenever you need.</div>`;
+  if (typeof resetSessionPromptCount === 'function') resetSessionPromptCount();
+  if (typeof resetConversationHistory === 'function') resetConversationHistory();
+  showScreen('adkar-screen');
 }
 
 function escapeHtml(text) {
