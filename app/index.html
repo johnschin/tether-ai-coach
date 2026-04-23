@@ -16,7 +16,16 @@
     try {
       var hash   = window.location.hash   || '';
       var search = window.location.search || '';
-      var isCallback = /access_token=/.test(hash) || /[?&]code=/.test(search);
+      // Phase I fix: Supabase PKCE auth codes are long random strings (43+ chars).
+      // Company invite codes like GILEAD-2026 are short. Only treat ?code= as an
+      // auth callback when the value is long enough to be a real PKCE token.
+      // Without this check, visiting ?code=GILEAD-2026 would show the loading
+      // spinner for 10 seconds before revealing the sign-in form.
+      var codeVal = '';
+      try { codeVal = new URLSearchParams(search).get('code') || ''; } catch(e) {}
+      // Supabase PKCE tokens are 43+ chars; company invite codes ≤ 40 chars.
+      // Threshold of 40 is shared with applyUrlCode() in app.js — keep in sync.
+      var isCallback = /access_token=/.test(hash) || codeVal.length > 40;
       if (isCallback) {
         document.documentElement.classList.add('auth-callback');
         window.setTimeout(function() {
@@ -135,7 +144,6 @@
   .icon-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
   /* ─── Phase G: Hamburger button ────────────────────────────────────────── */
-  /* Hidden by default. app.js shows it (display:flex) once session starts.   */
   .hamburger-btn {
     display: none; /* shown by JS at session start */
     flex-direction: column;
@@ -162,7 +170,6 @@
     transition: transform 0.25s ease, opacity 0.2s ease;
     transform-origin: center;
   }
-  /* Animate 3 bars → × when sidebar is open */
   .hamburger-btn.open .ham-bar:nth-child(1) { transform: translateY(7px) rotate(45deg); }
   .hamburger-btn.open .ham-bar:nth-child(2) { opacity: 0; transform: scaleX(0); }
   .hamburger-btn.open .ham-bar:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
@@ -253,16 +260,12 @@
   .trial-ended-signout:hover { background: var(--sand); color: var(--plum); }
 
   /* ─── Phase G: Sidebar overlay ─────────────────────────────────────────── */
-  /* Dark backdrop — shown when sidebar is open, closes on click */
   .sidebar-overlay {
     display: none;
     position: fixed;
     inset: 0;
     background: rgba(78, 74, 85, 0.35);
     z-index: 200;
-    /* Only visible on the chat screen — overlay is in the DOM always but     */
-    /* only harmful if accidentally shown on other screens (not possible since */
-    /* openSidebar() is only wired to the hamburger btn which is chat-only).  */
   }
   .sidebar-overlay.open { display: block; }
 
@@ -339,7 +342,6 @@
     flex-shrink: 0;
   }
 
-  /* Emotional tone badges */
   .tone-badge {
     font-size: 10px;
     font-weight: 500;
@@ -379,7 +381,6 @@
     display: block;
   }
 
-  /* Theme chips */
   .session-themes {
     display: flex;
     flex-wrap: wrap;
@@ -395,7 +396,6 @@
     white-space: nowrap;
   }
 
-  /* Empty / loading states inside the sidebar */
   .sidebar-empty {
     padding: 40px 20px;
     text-align: center;
@@ -595,10 +595,8 @@
 <!-- ─── Chat screen ──────────────────────────────────────────────────────── -->
 <div id="chat-screen" class="screen">
 
-  <!-- Phase G: left side now wraps hamburger btn + title together -->
   <div class="chat-header">
     <div class="chat-header-left-wrapper">
-      <!-- Hamburger: hidden by default, shown by app.js once session starts -->
       <button class="hamburger-btn" id="hamburger-btn" onclick="toggleSidebar()" aria-label="Past sessions" title="Past sessions">
         <span class="ham-bar"></span>
         <span class="ham-bar"></span>
@@ -610,7 +608,6 @@
       </div>
     </div>
     <div class="header-actions">
-      <!-- Phase G: copy button -->
       <button class="icon-btn" id="copy-btn" onclick="copyConversation()" title="Copy conversation">Copy</button>
       <button class="icon-btn" onclick="handleEndSession()">End Session</button>
       <button class="icon-btn" onclick="handleSignOut()">Sign Out</button>

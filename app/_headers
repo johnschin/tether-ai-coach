@@ -1,5 +1,32 @@
-/*.html
-  Cache-Control: no-cache, no-store, must-revalidate
+# ─── Tether AI Coach — Netlify security headers ──────────────────────────────
+# Deploy location: app/_headers  (Netlify publish dir is app/)
+# Applied to every response served from tether-ai-coach.netlify.app
+#
+# OWASP A05 fix (added 2026-04-23):
+#   - X-Frame-Options: DENY — prevents clickjacking
+#   - X-Content-Type-Options: nosniff — prevents MIME sniffing
+#   - Referrer-Policy — limits referrer data sent to third parties
+#   - Permissions-Policy — disables unused browser capabilities
+#   - Content-Security-Policy — restricts resource loading origins
+#   - Strict-Transport-Security — enforces HTTPS (only activates on production)
+#
+# CSP notes:
+#   'unsafe-inline' is required for:
+#     - The inline flicker-suppressor <script> in index.html <head>
+#     - Inline <style> blocks in index.html and trial.html
+#   script-src includes cdn.jsdelivr.net for @supabase/supabase-js
+#   connect-src includes both Supabase project URL and Cloudflare Worker URL
+#   frame-ancestors 'none' duplicates X-Frame-Options for modern browsers
+#
+# TODO (post-pilot improvement): Remove 'unsafe-inline' from script-src by
+#   extracting the flicker-suppressor to an external file with a nonce/hash.
+#
+# ─────────────────────────────────────────────────────────────────────────────
 
-/
-  Cache-Control: no-cache, no-store, must-revalidate
+/*
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  Content-Security-Policy: default-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' https://ylufotpafbmhhjffovpf.supabase.co https://tether-proxy.john-834.workers.dev; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'

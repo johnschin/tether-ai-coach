@@ -22,10 +22,49 @@ const CONSENT_VERSION = 'tether-v1-2026-04';
 // so we can surface slightly different copy. Values: null | string.
 let trialEndReason = null;
 
+// Phase I (2026-04-23): company signup code parsed from ?code= URL param on
+// page load. Stored here so resetMagicForm() can re-apply it after the user
+// clicks "try a different email" without losing the pre-filled code.
+let urlSignupCode = null;
+
 window.addEventListener('DOMContentLoaded', async () => {
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').catch(console.error);
   }
+
+  // Phase I: URL-based signup code — HR distributes a link like
+  // tether-ai-coach.netlify.app?code=GILEAD-2026. On page load we read the
+  // ?code= param, silently pre-fill the company code field, and hide it so
+  // employees don't have to type anything. The URL is cleaned immediately so
+  // a page refresh doesn't re-read a stale code.
+  (function applyUrlCode() {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const raw = urlParams.get('code');
+      // Length guard: Supabase PKCE auth codes are 43+ chars; company invite
+      // codes like GILEAD-2026 are short human-readable strings. Only treat
+      // ?code= as a company invite code when it's ≤ 40 chars.
+      //
+      // Without this guard, a PKCE auth token landing on ?code= would:
+      //   (a) fill the company code input with garbage, and
+      //   (b) call history.replaceState, which races with supabase-js's async
+      //       PKCE exchange on slow/mobile devices and can wipe the token
+      //       before supabase-js reads it — breaking cross-device sign-in.
+      //       (Documented in app.js.pre-phase-d.bak — hard-won lesson.)
+      if (raw && raw.trim() && raw.trim().length <= 40) {
+        urlSignupCode = raw.trim();
+        const codeInput = document.getElementById('magic-signup-code');
+        if (codeInput) {
+          codeInput.value = urlSignupCode;
+          const codeGroup = codeInput.closest('.form-group');
+          if (codeGroup) codeGroup.style.display = 'none';
+        }
+        // Safe to clean the URL here: we only reach this branch for short
+        // company codes, not PKCE tokens, so supabase-js has nothing to read.
+        try { window.history.replaceState({}, '', window.location.pathname); } catch (e) {}
+      }
+    } catch (e) { /* never break signup flow */ }
+  })();
 
   const session = await getSession();
   if (session?.user) {
@@ -388,8 +427,13 @@ function resetMagicForm() {
   if (warning) warning.style.display = 'none';
   document.getElementById('magic-name').value   = '';
   document.getElementById('magic-email').value  = '';
+  // Phase I: re-apply URL code if one was present; keep the field hidden
   const codeInput = document.getElementById('magic-signup-code');
-  if (codeInput) codeInput.value = '';
+  if (codeInput) {
+    codeInput.value = urlSignupCode || '';
+    const codeGroup = codeInput.closest('.form-group');
+    if (codeGroup) codeGroup.style.display = urlSignupCode ? 'none' : '';
+  }
   document.getElementById('magic-name').focus();
 }
 

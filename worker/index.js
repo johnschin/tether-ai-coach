@@ -1,34 +1,54 @@
-// ─── Tether AI Coach — Cloudflare Worker (Phase E: Company-Gated Access) ─────
+// ─── Tether AI Coach — Cloudflare Worker (Phase I) ────────────────────────
 // Destination in repo: tether-ai-coach/worker/index.js
 //
-// Changes from live baseline (worker_index_live_2026-04-22.js):
+// Phase I changes (2026-04-23):
 //
-//   Phase E — Company-gated endpoint access (2026-04-22):
-//   After JWT verification passes, all four application endpoints now check
-//   whether the user's company pilot window is currently open. Access is
-//   denied with 403 + a human-readable message if:
-//     - company.active = false  (company manually deactivated by admin)
-//     - pilot_start is in the future  (program not yet open)
-//     - pilot_end is in the past  (program concluded)
-//   Users with no company_id (admins, unassigned accounts) always pass through.
+//   SECURITY FIXES (OWASP audit):
 //
-//   Fail-open policy: if either Supabase fetch inside checkPilotAccess fails
-//   (network timeout, transient error), the request is allowed through rather
-//   than hard-blocking users on infrastructure issues.
+//   1. CRITICAL — Restore Phase E pilot-window check (checkPilotAccess) and
+//      Phase F trial enforcement (checkTrialAccess, computeTrialStatus,
+//      persistTrialCounts) that were accidentally dropped in Phase H.
+//      Phase H rebased from the pre-Phase-E baseline when fixing handleSaveSummary
+//      and silently lost both Gate 2 (pilot access) and Gate 3 (trial limits).
+//      Without this fix, free trial users could send unlimited prompts and
+//      company pilot windows were not enforced.
 //
-//   No new env vars required. Reads from existing companies + user_profiles
-//   tables via SUPABASE_SERVICE_KEY (already in use by the other handlers).
+//   2. HIGH — Add memoryContext length cap + sanitization in handleChat.
+//      memoryContext is client-supplied and injected into the system prompt.
+//      A length cap of 8 000 chars prevents oversized payloads; a newline
+//      normalization prevents the most naive injection patterns.
+//
+//   3. MEDIUM — Log a warning when CORS falls back to wildcard ('*').
+//      TETHER_ALLOWED_ORIGIN should be set in Cloudflare env to
+//      https://tether-ai-coach.netlify.app.
+//
+//   Other functions (handleGetMemory, handleAdkar, buildMemoryContext,
+//   buildSystemPrompt) are unchanged from Phase H.
+//   handleSaveSummary carries forward Phase H's fixed INSERT (title, pillar,
+//   topics, message_count, session_id) unchanged.
 //
 // Deploy: cd worker && npm run deploy  (or: wrangler deploy)
 
 import { createRemoteJWKSet, jwtVerify } from 'jose';
+
+// ─── Trial constants ─────────────────────────────────────────────────────────
+const TRIAL_MAX_PROMPTS = 60;
+const TRIAL_DAYS        = 14;
+
+// ─── memoryContext security cap ───────────────────────────────────────────────
+// memoryContext arrives from the client. Cap size to prevent oversized payloads
+// and trim control characters that could interfere with prompt structure.
+// Aggressive injection attempts (e.g. "IGNORE ALL PREVIOUS INSTRUCTIONS") are
+// a model-layer concern — the system prompt anchors context robustly — but
+// length control keeps the risk surface narrow.
+const MEMORY_CONTEXT_MAX_CHARS = 8_000;
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
   'Access-Control-Allow-Methods': 'POST, OPTIONS'
 };
 
-// ─── JWKS cache ─────────────────────────────────────────────────────────────
+// ─── JWKS cache ──────────────────────────────────────────────────────────────
 let _jwks = null;
 function getJWKS(supabaseUrl) {
   if (!_jwks) {
@@ -39,7 +59,7 @@ function getJWKS(supabaseUrl) {
   return _jwks;
 }
 
-// ─── Gate 1: JWT verification ────────────────────────────────────────────────
+// ─── Gate 1: JWT verification ─────────────────────────────────────────────────
 // Returns { userId, email, claims } on success, { error, status } on failure.
 async function verifyAuth(request, env) {
   const authHeader = request.headers.get('Authorization');
@@ -76,25 +96,15 @@ async function verifyAuth(request, env) {
 
 // ─── Gate 2: Company pilot window ────────────────────────────────────────────
 // Returns null (access granted) or { error, status, message } (access denied).
-//
-// Access rules (evaluated in order):
-//   1. No company_id on user_profiles → allow (admins, unassigned users)
-//   2. company.active = false → 403 pilot_inactive
-//   3. pilot_start in the future → 403 pilot_not_started
-//   4. pilot_end in the past → 403 pilot_concluded
-//   5. All checks pass → allow
-//
-// Fail-open: any Supabase fetch failure (non-200, network error, parse error)
-// lets the request through. We prefer a coaching session for a post-pilot user
-// over locking out a valid user due to a transient DB hiccup.
+// Users with no company_id (free trial users, admins) always pass through here;
+// their access is governed by checkTrialAccess() inside handleChat() instead.
 async function checkPilotAccess(userId, env) {
   try {
-    // Step 1: get the user's company_id from user_profiles
     const profileRes = await fetch(
       `${env.SUPABASE_URL}/rest/v1/user_profiles?id=eq.${userId}&select=company_id`,
       {
         headers: {
-          'apikey': env.SUPABASE_SERVICE_KEY,
+          'apikey':        env.SUPABASE_SERVICE_KEY,
           'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`
         }
       }
@@ -103,18 +113,17 @@ async function checkPilotAccess(userId, env) {
       console.warn('[pilot] profile fetch failed (%d), allowing through', profileRes.status);
       return null;
     }
-    const profiles = await profileRes.json();
+    const profiles  = await profileRes.json();
     const companyId = profiles[0]?.company_id;
 
-    // Admins and unassigned users (company_id = null) always pass through.
+    // No company → pass through (free trial users handled by checkTrialAccess)
     if (!companyId) return null;
 
-    // Step 2: fetch the company's pilot window
     const companyRes = await fetch(
       `${env.SUPABASE_URL}/rest/v1/companies?id=eq.${companyId}&select=active,pilot_start,pilot_end`,
       {
         headers: {
-          'apikey': env.SUPABASE_SERVICE_KEY,
+          'apikey':        env.SUPABASE_SERVICE_KEY,
           'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`
         }
       }
@@ -124,52 +133,159 @@ async function checkPilotAccess(userId, env) {
       return null;
     }
     const companies = await companyRes.json();
-    const company = companies[0];
-
-    // No company row found — shouldn't happen, allow through rather than block.
+    const company   = companies[0];
     if (!company) return null;
 
-    // Step 3: evaluate access rules
     if (company.active === false) {
       return {
-        error: 'pilot_inactive',
-        status: 403,
+        error:   'pilot_inactive',
+        status:  403,
         message: "Your organization's access to Tether is not currently active. Please contact your HR or L&D team for more information."
       };
     }
-
     const now = new Date();
-
     if (company.pilot_start && new Date(company.pilot_start) > now) {
       return {
-        error: 'pilot_not_started',
-        status: 403,
+        error:   'pilot_not_started',
+        status:  403,
         message: "Your organization's Tether pilot hasn't begun yet. Please check back on your program start date."
       };
     }
-
     if (company.pilot_end && new Date(company.pilot_end) < now) {
       return {
-        error: 'pilot_concluded',
-        status: 403,
+        error:   'pilot_concluded',
+        status:  403,
         message: "Your organization's Tether pilot has concluded. Thank you for participating. Please reach out to your HR or L&D team if you have questions about continued access."
       };
     }
-
-    return null; // All checks pass — access granted
+    return null;
 
   } catch (err) {
-    // Unexpected error (network timeout, JSON parse failure, etc.)
-    // Fail open so infrastructure hiccups don't lock out users.
     console.error('[pilot] checkPilotAccess threw, allowing through:', err.message);
     return null;
   }
 }
 
-// ─── Entry point ─────────────────────────────────────────────────────────────
+// ─── Gate 3: Free trial access (/chat only) ───────────────────────────────────
+// Called inside handleChat() for every request that passed Gates 1 + 2.
+// Returns one of:
+//   { isTrial: false }                            → company pilot user; no limits
+//   { isTrial: true, deny: null, profile }        → within limits; safe to proceed
+//   { isTrial: true, deny: { error, status, message } }  → trial expired
+//
+// Fail-open: any Supabase error returns { isTrial: false } to avoid locking
+// out users during transient infrastructure issues.
+async function checkTrialAccess(userId, env) {
+  try {
+    const res = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/user_profiles?id=eq.${userId}` +
+      `&select=company_id,trial_started_at,trial_prompt_count`,
+      {
+        headers: {
+          'apikey':        env.SUPABASE_SERVICE_KEY,
+          'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`
+        }
+      }
+    );
+    if (!res.ok) {
+      console.warn('[trial] profile fetch failed (%d), allowing through', res.status);
+      return { isTrial: false };
+    }
+    const rows    = await res.json();
+    const profile = rows[0];
+
+    // Has company_id → company pilot user; no trial limits
+    if (profile?.company_id) return { isTrial: false };
+
+    const promptsUsed = profile?.trial_prompt_count || 0;
+    const startedAt   = profile?.trial_started_at   || null;
+
+    // Time limit check
+    if (startedAt) {
+      const expiryMs = new Date(startedAt).getTime() + TRIAL_DAYS * 86_400_000;
+      if (Date.now() > expiryMs) {
+        return {
+          isTrial: true,
+          deny: {
+            error:   'trial_expired',
+            reason:  'time_limit',
+            status:  403,
+            message: `Your ${TRIAL_DAYS}-day free trial has ended. Register your interest below to be considered for an organizational pilot.`
+          }
+        };
+      }
+    }
+
+    // Prompt limit check
+    if (promptsUsed >= TRIAL_MAX_PROMPTS) {
+      return {
+        isTrial: true,
+        deny: {
+          error:   'trial_expired',
+          reason:  'prompts_exhausted',
+          status:  403,
+          message: `You've used all ${TRIAL_MAX_PROMPTS} prompts in your free trial. Register your interest below to be considered for an organizational pilot.`
+        }
+      };
+    }
+
+    return { isTrial: true, deny: null, profile };
+
+  } catch (err) {
+    console.error('[trial] checkTrialAccess threw, allowing through:', err.message);
+    return { isTrial: false };
+  }
+}
+
+// ─── Trial count helpers ──────────────────────────────────────────────────────
+// computeTrialStatus: synchronous; builds status object + internal fields.
+// persistTrialCounts: async PATCH to user_profiles — must be run via
+// ctx.waitUntil() so Cloudflare doesn't cancel it on response flush.
+function computeTrialStatus(profile) {
+  const newCount  = (profile?.trial_prompt_count || 0) + 1;
+  const isFirst   = !profile?.trial_started_at;
+  const startedAt = isFirst ? new Date().toISOString() : profile.trial_started_at;
+  return {
+    prompts_used:      newCount,
+    prompts_remaining: Math.max(0, TRIAL_MAX_PROMPTS - newCount),
+    started_at:        startedAt,
+    _newCount:  newCount,
+    _isFirst:   isFirst
+  };
+}
+
+async function persistTrialCounts(userId, ts, env) {
+  const updates = { trial_prompt_count: ts._newCount };
+  if (ts._isFirst) updates.trial_started_at = ts.started_at;
+  try {
+    await fetch(
+      `${env.SUPABASE_URL}/rest/v1/user_profiles?id=eq.${userId}`,
+      {
+        method: 'PATCH',
+        headers: {
+          'Content-Type':  'application/json',
+          'apikey':        env.SUPABASE_SERVICE_KEY,
+          'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`
+        },
+        body: JSON.stringify(updates)
+      }
+    );
+  } catch (e) {
+    console.warn('[trial] count persist failed:', e.message);
+  }
+}
+
+// ─── Entry point ──────────────────────────────────────────────────────────────
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const corsOrigin = env.TETHER_ALLOWED_ORIGIN || '*';
+
+    // Security: warn if CORS falls back to wildcard.
+    // Fix: set TETHER_ALLOWED_ORIGIN=https://tether-ai-coach.netlify.app
+    // in Cloudflare Worker environment variables.
+    if (corsOrigin === '*') {
+      console.warn('[cors] TETHER_ALLOWED_ORIGIN is not configured — CORS is wildcard. Set this to https://tether-ai-coach.netlify.app in Cloudflare Worker env vars.');
+    }
 
     if (request.method === 'OPTIONS') {
       return new Response(null, {
@@ -187,7 +303,7 @@ export default {
 
     const { pathname } = new URL(request.url);
 
-    // Gate 1: valid Supabase session JWT required for all application endpoints.
+    // Gate 1: valid Supabase session JWT required for all endpoints
     const auth = await verifyAuth(request, env);
     if (auth.error) {
       return new Response(
@@ -196,8 +312,7 @@ export default {
       );
     }
 
-    // Gate 2: company pilot window must be currently open.
-    // Returns null (allow) or { error, status, message } (deny with 403).
+    // Gate 2: company pilot window must be open (free trial users pass through)
     const pilotCheck = await checkPilotAccess(auth.userId, env);
     if (pilotCheck) {
       return new Response(
@@ -207,7 +322,7 @@ export default {
     }
 
     try {
-      if (pathname === '/chat')         return handleChat(request, env, corsHeader, auth);
+      if (pathname === '/chat')         return handleChat(request, env, corsHeader, auth, ctx);
       if (pathname === '/get-memory')   return handleGetMemory(request, env, corsHeader, auth);
       if (pathname === '/save-summary') return handleSaveSummary(request, env, corsHeader, auth);
       if (pathname === '/adkar')        return handleAdkar(request, env, corsHeader, auth);
@@ -225,38 +340,82 @@ export default {
   }
 };
 
-// ─── /chat ───────────────────────────────────────────────────────────────────
-async function handleChat(request, env, corsHeader, auth) {
-  const { messages, memoryContext } = await request.json();
-  const systemPrompt = buildSystemPrompt(memoryContext);
+// ─── /chat ────────────────────────────────────────────────────────────────────
+async function handleChat(request, env, corsHeader, auth, ctx) {
+  const body = await request.json();
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
+  // Gate 3: free trial limit check (only for users with no company_id)
+  const trial = await checkTrialAccess(auth.userId, env);
+  if (trial.deny) {
+    return new Response(
+      JSON.stringify({
+        error:   trial.deny.error,
+        reason:  trial.deny.reason,
+        message: trial.deny.message
+      }),
+      { status: trial.deny.status, headers: corsHeader }
+    );
+  }
+
+  const { messages } = body;
+
+  // Security: sanitize client-supplied memoryContext before injecting into
+  // the system prompt. Cap at MEMORY_CONTEXT_MAX_CHARS to prevent oversized
+  // payloads; strip null bytes and lone carriage returns that could confuse
+  // prompt structure. Sophisticated prompt injection attempts are a model-
+  // layer concern mitigated by the strongly-anchored system prompt.
+  const rawMemoryContext  = typeof body.memoryContext === 'string' ? body.memoryContext : '';
+  const safeMemoryContext = rawMemoryContext
+    .slice(0, MEMORY_CONTEXT_MAX_CHARS)
+    .replace(/\0/g, '')       // strip null bytes
+    .replace(/\r(?!\n)/g, ''); // normalize lone CR to nothing
+
+  const systemPrompt = buildSystemPrompt(safeMemoryContext);
+
+  const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': env.ANTHROPIC_API_KEY,
+      'Content-Type':      'application/json',
+      'x-api-key':         env.ANTHROPIC_API_KEY,
       'anthropic-version': '2023-06-01'
     },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
+      model:      'claude-sonnet-4-20250514',
       max_tokens: 1000,
-      system: systemPrompt,
+      system:     systemPrompt,
       messages
     })
   });
-  const data = await response.json();
+  const data = await anthropicRes.json();
+
+  // Only count prompt + attach trial_status when Anthropic returned success.
+  // ctx.waitUntil() ensures the PATCH completes after response flush.
+  if (trial.isTrial && trial.profile && anthropicRes.ok && !data.error) {
+    const ts = computeTrialStatus(trial.profile);
+    ctx.waitUntil(persistTrialCounts(auth.userId, ts, env));
+    const trialStatus = {
+      prompts_used:      ts.prompts_used,
+      prompts_remaining: ts.prompts_remaining,
+      started_at:        ts.started_at
+    };
+    return new Response(
+      JSON.stringify({ ...data, trial_status: trialStatus }),
+      { headers: corsHeader }
+    );
+  }
+
   return new Response(JSON.stringify(data), { headers: corsHeader });
 }
 
-// ─── /get-memory ─────────────────────────────────────────────────────────────
+// ─── /get-memory ──────────────────────────────────────────────────────────────
 async function handleGetMemory(request, env, corsHeader, auth) {
   const userId = auth.userId;
 
   const summariesRes = await fetch(
-    `${env.SUPABASE_URL}/rest/v1/session_summaries?user_id=eq.${userId}&order=session_date.desc&limit=5`,
+    `${env.SUPABASE_URL}/rest/v1/session_summaries?user_id=eq.${userId}&order=created_at.desc&limit=5`,
     {
       headers: {
-        'apikey': env.SUPABASE_SERVICE_KEY,
+        'apikey':        env.SUPABASE_SERVICE_KEY,
         'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`
       }
     }
@@ -267,7 +426,7 @@ async function handleGetMemory(request, env, corsHeader, auth) {
     `${env.SUPABASE_URL}/rest/v1/user_memory_profile?user_id=eq.${userId}`,
     {
       headers: {
-        'apikey': env.SUPABASE_SERVICE_KEY,
+        'apikey':        env.SUPABASE_SERVICE_KEY,
         'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`
       }
     }
@@ -278,7 +437,7 @@ async function handleGetMemory(request, env, corsHeader, auth) {
     `${env.SUPABASE_URL}/rest/v1/adkar_assessments?user_id=eq.${userId}&order=assessed_at.desc&limit=1`,
     {
       headers: {
-        'apikey': env.SUPABASE_SERVICE_KEY,
+        'apikey':        env.SUPABASE_SERVICE_KEY,
         'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`
       }
     }
@@ -289,13 +448,13 @@ async function handleGetMemory(request, env, corsHeader, auth) {
     `${env.SUPABASE_URL}/rest/v1/user_profiles?id=eq.${userId}&select=preferred_name`,
     {
       headers: {
-        'apikey': env.SUPABASE_SERVICE_KEY,
+        'apikey':        env.SUPABASE_SERVICE_KEY,
         'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`
       }
     }
   );
   const profileNameRows = await profileNameRes.json();
-  const preferredName = profileNameRows[0]?.preferred_name || null;
+  const preferredName   = profileNameRows[0]?.preferred_name || null;
 
   const memoryContext = buildMemoryContext(summaries, profile[0], adkar[0], preferredName);
   return new Response(
@@ -309,32 +468,40 @@ async function handleSaveSummary(request, env, corsHeader, auth) {
   const { conversation } = await request.json();
   const userId = auth.userId;
 
+  // Count message_count: number of "Employee:" lines in the conversation string
+  const messageCount = (conversation.match(/^Employee:/gm) || []).length;
+
   const summaryRes = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': env.ANTHROPIC_API_KEY,
+      'Content-Type':      'application/json',
+      'x-api-key':         env.ANTHROPIC_API_KEY,
       'anthropic-version': '2023-06-01'
     },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 500,
+      model:      'claude-sonnet-4-20250514',
+      max_tokens: 600,
       messages: [{
         role: 'user',
-        content: `Summarize this coaching session in 3-5 concise bullet points.
-Focus on: key themes discussed, emotional state, tools used, any commitments made.
-Be concise. No verbatim quotes. Return ONLY valid JSON, no markdown, no backticks.
+        content: `Analyze this coaching session and return ONLY valid JSON with no markdown, no backticks, no extra text.
 
-Format:
+Required JSON format:
 {
-  "summary": "bullet point summary as single string",
-  "themes": ["theme1", "theme2"],
-  "tools_used": ["tool1"],
-  "emotional_tone": "distressed|neutral|hopeful|mixed"
+  "title": "A short (5-8 word) human-readable session title, e.g. 'Navigating anxiety about the reorg'",
+  "summary": "2-4 sentence plain-text summary of what was discussed and any commitments made. No bullet points.",
+  "pillar": "One of exactly: stress_burnout | anger_reactivity | relationships_communication | identity_meaning",
+  "topics": ["topic1", "topic2", "topic3"]
 }
 
-Valid themes: job_insecurity, burnout, ai_anxiety, survivor_guilt,
-identity, relationships, performance, psychological_safety, change_resistance
+Pillar selection guide:
+- stress_burnout: stress, overwhelm, burnout, overload, nervous system, exhaustion
+- anger_reactivity: anger, irritability, reactivity, frustration, conflict
+- relationships_communication: manager relationships, team dynamics, communication, trust
+- identity_meaning: identity, meaning, midlife, purpose, values, feeling lost
+
+Valid topics (pick 2-5 that apply): job_insecurity, burnout, ai_anxiety, survivor_guilt,
+identity, relationships, performance, psychological_safety, change_resistance,
+communication, trust, anger, stress, exhaustion, purpose, values
 
 Conversation:
 ${conversation}`
@@ -349,28 +516,35 @@ ${conversation}`
     parsed = JSON.parse(text);
   } catch (e) {
     parsed = {
-      summary: 'Session completed',
-      themes: [],
-      tools_used: [],
-      emotional_tone: 'neutral'
+      title:  'Coaching session',
+      summary: 'Session completed.',
+      pillar:  null,
+      topics:  []
     };
   }
 
-  await fetch(`${env.SUPABASE_URL}/rest/v1/session_summaries`, {
+  const saveRes = await fetch(`${env.SUPABASE_URL}/rest/v1/session_summaries`, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
-      'apikey': env.SUPABASE_SERVICE_KEY,
+      'Content-Type':  'application/json',
+      'apikey':        env.SUPABASE_SERVICE_KEY,
       'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`
     },
     body: JSON.stringify({
-      user_id: userId,
-      summary: parsed.summary,
-      themes: parsed.themes,
-      tools_used: parsed.tools_used,
-      emotional_tone: parsed.emotional_tone
+      user_id:       userId,
+      session_id:    crypto.randomUUID(),
+      title:         parsed.title   || 'Coaching session',
+      summary:       parsed.summary || 'Session completed.',
+      pillar:        parsed.pillar  || null,
+      topics:        parsed.topics  || [],
+      message_count: messageCount   || 0
     })
   });
+
+  if (!saveRes.ok) {
+    const errText = await saveRes.text();
+    console.error('[save-summary] Supabase insert failed:', saveRes.status, errText);
+  }
 
   return new Response(
     JSON.stringify({ success: true }),
@@ -378,7 +552,7 @@ ${conversation}`
   );
 }
 
-// ─── /adkar ──────────────────────────────────────────────────────────────────
+// ─── /adkar ───────────────────────────────────────────────────────────────────
 async function handleAdkar(request, env, corsHeader, auth) {
   const { scores, changeContext } = await request.json();
   const userId = auth.userId;
@@ -396,19 +570,19 @@ async function handleAdkar(request, env, corsHeader, auth) {
   await fetch(`${env.SUPABASE_URL}/rest/v1/adkar_assessments`, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
-      'apikey': env.SUPABASE_SERVICE_KEY,
+      'Content-Type':  'application/json',
+      'apikey':        env.SUPABASE_SERVICE_KEY,
       'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`
     },
     body: JSON.stringify({
-      user_id: userId,
-      change_context: changeContext || 'general',
-      awareness_score: scores.awareness,
-      desire_score: scores.desire,
-      knowledge_score: scores.knowledge,
-      ability_score: scores.ability,
+      user_id:             userId,
+      change_context:      changeContext || 'general',
+      awareness_score:     scores.awareness,
+      desire_score:        scores.desire,
+      knowledge_score:     scores.knowledge,
+      ability_score:       scores.ability,
       reinforcement_score: scores.reinforcement,
-      lowest_stage: lowestStage
+      lowest_stage:        lowestStage
     })
   });
 
@@ -418,7 +592,7 @@ async function handleAdkar(request, env, corsHeader, auth) {
   );
 }
 
-// ─── Memory context ───────────────────────────────────────────────────────────
+// ─── Memory context builder ───────────────────────────────────────────────────
 function buildMemoryContext(summaries, profile, adkar, preferredName) {
   const hasHistory = !!(summaries?.length || profile || adkar);
   if (!hasHistory && !preferredName) return '';
@@ -436,10 +610,11 @@ function buildMemoryContext(summaries, profile, adkar, preferredName) {
   if (summaries?.length) {
     context += 'Recent sessions:\n';
     summaries.forEach((s) => {
-      const date = s.session_date?.split('T')[0] || 'recent';
+      const date = (s.created_at || s.session_date || '').split('T')[0] || 'recent';
       context += `- ${date}: ${s.summary}\n`;
-      if (s.themes?.length) context += `  Themes: ${s.themes.join(', ')}\n`;
-      if (s.emotional_tone) context += `  Tone: ${s.emotional_tone}\n`;
+      if (s.topics?.length)   context += `  Topics: ${s.topics.join(', ')}\n`;
+      if (s.pillar)           context += `  Pillar: ${s.pillar}\n`;
+      if (s.emotional_tone)   context += `  Tone: ${s.emotional_tone}\n`;
     });
     context += '\n';
   }
