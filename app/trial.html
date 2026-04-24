@@ -16,7 +16,12 @@
     try {
       var hash   = window.location.hash   || '';
       var search = window.location.search || '';
-      var isCallback = /access_token=/.test(hash) || /[?&]code=/.test(search);
+      // Supabase PKCE auth codes are long (43+ chars); company invite codes
+      // are short. Only treat ?code= as an auth callback for long values so
+      // a short invite code doesn't trigger a 10-second loading spinner.
+      var codeVal = '';
+      try { codeVal = new URLSearchParams(search).get('code') || ''; } catch(e) {}
+      var isCallback = /access_token=/.test(hash) || codeVal.length > 40;
       if (isCallback) {
         document.documentElement.classList.add('auth-callback');
         window.setTimeout(function() {
@@ -463,6 +468,13 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+  // ─── Trial signup source tag ─────────────────────────────────────────────
+  // Tells auth.js to include signup_source='trial' in magic-link metadata so
+  // the server-side trigger writes it to user_profiles. This is what fires the
+  // trial signup notification email to john@guidetoself.com.
+  window.TETHER_SIGNUP_SOURCE = 'trial';
+</script>
 <script src="auth.js"></script>
 <script src="memory.js"></script>
 <script src="coaching.js"></script>

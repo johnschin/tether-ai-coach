@@ -37,6 +37,12 @@ async function sendMagicLink(email, preferredName, signupCode) {
     // realistic upper bound for a company-distributed code.
     data.signup_code = signupCode.trim().slice(0, 64);
   }
+  // Tag the signup source if set by the page before auth.js loads.
+  // trial.html sets window.TETHER_SIGNUP_SOURCE = 'trial' so we can
+  // identify trial signups and send follow-up notifications.
+  if (window.TETHER_SIGNUP_SOURCE) {
+    data.signup_source = String(window.TETHER_SIGNUP_SOURCE).slice(0, 32);
+  }
   if (Object.keys(data).length > 0) {
     options.data = data;
   }
